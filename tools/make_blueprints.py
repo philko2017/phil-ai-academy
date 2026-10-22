@@ -1,7 +1,8 @@
 """產生 Phil 的 AI 學院會員模組的 Make 藍圖，輸出到 make/（改寫自 philko2017/line-namecard 的 tools/make_member_blueprint.py）：
 
 - 會員_API.blueprint.json：「AI學院｜會員 API」
-    LIFF 會員頁面：a=me 我的身分（順便校正選單）｜a=apply 申請入會＋匯款回報（欄位 t 是 LINE Access Token）
+    LIFF 會員頁面：a=me 我的身分＋前台設定＋方案（順便校正選單）｜a=apply 申請入會＋匯款回報｜a=profile 會員自己改基本資料
+    （欄位 t 是 LINE Access Token）。頁面上的文字、方案、收款帳戶都從 Notion「前台設定」「方案」讀，repo 裡不放。
     Notion 核准連結：a=approve 核准入會｜a=sync 依身分套用選單（欄位 k 是密鑰、id 是名冊頁面 ID）
 - 會員_LINE事件.blueprint.json：「AI學院｜會員：LINE 事件」加好友就建一筆非會員；封鎖時標記
 - 會員_建立圖文選單.blueprint.json：「AI學院｜會員：建立圖文選單（手動執行）」訪客選單設為預設、會員選單設別名 member，
@@ -24,6 +25,10 @@ CFG = json.loads((ROOT / "tools" / ("config.example.json" if "--example" in sys.
 MK, LN = CFG["make"], CFG["line"]
 CONN_NOTION, CONN_LINE = MK["notion_connection_id"], MK["line_connection_id"]
 DS = CFG["notion"]["data_source_id"]
+# 前台設定（一列）與方案：會員頁面上的文字、收款帳戶、價格都從這兩張 Notion 表讀，repo 裡不放
+SETTINGS_PAGE = CFG["notion"]["settings_page_id"]
+PLANS_DS = CFG["notion"]["plans_data_source_id"]
+NOTION_VERSION = "2025-09-03"   # 查詢 data source（/v1/data_sources/…/query）要這個版本
 KEY = CFG["approve_key"]
 CHANNEL = LN["login_channel_id"]
 MEMBER_LIFF = f"https://liff.line.me/{LN['liff_id']}"
@@ -40,9 +45,21 @@ STATE = '{{switch(%s; "審核中"; "pending"; "一般會員"; "member"; "高級�
 # 申請表單欄位：頁面代號、Notion 欄位、型別、長度上限（和 liff/member/app.js 的 FIELDS 對應）
 APPLY_FIELDS = [("name", "姓名", "title", 60), ("phone", "電話", "phone_number", 40), ("email", "Email", "email", 120),
                 ("note", "備註", "rich_text", 1000)]
-# 方案只接受這兩個值，其他一律當成月繳（頁面送來的值不直接寫進 Notion）
-PLAN = '{{if(1.plan = "年繳 3600"; "年繳 3600"; "月繳 699")}}'
-AMOUNT = '{{if(1.plan = "年繳 3600"; 3600; 699)}}'
+# 會員可以自己改的欄位（寫入限制：身分、方案、到期日等都不能改）
+PROFILE_FIELDS = APPLY_FIELDS
+# 頁面送來的方案名稱只留中英數和空白，再拿去「方案」表找；找不到就不收（價格、會籍長度一律以 Notion 為準）
+PLAN_IN = "{{replace(substring(1.plan; 0; 40); /[^0-9A-Za-z\\u4e00-\\u9fff ]/g; \"\")}}"
+PLANS_QUERY = '{"filter":{"and":[{"property":"上架","checkbox":{"equals":true}}]},"sorts":[{"property":"排序","direction":"ascending"}]}'
+
+
+def plan_query(name_expr):
+    return ('{"filter":{"and":[{"property":"名稱","title":{"equals":"' + name_expr + '"}},'
+            '{"property":"上架","checkbox":{"equals":true}}]}}')
+
+
+def np(mod, prop, path):
+    """讀 Notion API 回傳的第一筆結果的欄位，例如 np(P, "價格", "number")"""
+    return "{{" + f"{mod}.body.results[1].properties.`{prop}`.{path}" + "}}"
 
 # HTTP「Make a request」模組的必填設定。用 API 建立時不會自動帶入，少了會報 BundleValidationError（苗栗踩過）
 HTTP_DEFAULTS = {"rejectUnauthorized": True, "followRedirect": True, "followAllRedirects": False, "useQuerystring": False,
@@ -149,6 +166,17 @@ class B:
             d["onerror"] = onerror
         return d
 
+    def notion_api(self, name, url, method="GET", body=None):
+        mapper = {"url": url, "version": NOTION_VERSION, "method": method,
+                  "headers": [{"key": "Content-Type", "value": "application/json"}], "qs": []}
+        if body is not None:
+            mapper["body"] = body
+        return self.notion("makeApiCall", name, mapper)
+
+    def to_json(self, name, obj):
+        return {"id": self.nid(), "module": "json:TransformToJSON", "version": 1, "parameters": {"space": ""},
+                "mapper": {"object": obj}, "metadata": self.meta(name)}
+
     def find_member(self, name, uid):
         return self.notion("searchObjects1", name, {"limit": "1", "select": "data_source_item", "data_source": DS,
                                                      "filter": [[c("LINE User ID |&*^%$#@| rich_text", "text:equals", uid)]]})
@@ -222,10 +250,13 @@ def build_api():
         no_line = (flt(f"沒有 LINE 帳號（{action}）", [[c(uid, "notexist")]]), [
             b.respond(f"回傳沒有 LINE（{action}）", html("⚠ 這筆沒有 LINE 帳號", "這位不是從 LINE 加入的，無法換選單。"), "400", True)])
         if action == "approve":
-            # 到期日從核准當天起算：年繳一年，月繳一個月
-            expiry = "{{formatDate(if(" + plan[2:-2] + ' = "年繳 3600"; addYears(now; 1); addMonths(now; 1)); "YYYY-MM-DD")}}'
+            # 到期日從核准當天起算，月數讀「方案」表的「會籍月數」（找不到就算一個月）
+            pl = b.notion_api("讀方案的會籍月數", f"/v1/data_sources/{PLANS_DS}/query", "POST", plan_query(plan))
+            months = np(pl["id"], "會籍月數", "number")
+            expiry = "{{formatDate(addMonths(now; ifempty(" + months[2:-2] + "; 1)); \"YYYY-MM-DD\")}}"
             return [g, b.router("可否核准", [
                 (flt("審核中，核准", [[c(ident, "text:equal", "審核中"), c(uid, "exist")]]), [
+                    pl,
                     b.update("改成一般會員", page, [fv("身分", "select", "一般會員"), now("核准時間"), date("到期日", expiry)]),
                     *link_member(b, uid, page, "核准", onfail_html=True),
                     b.respond("回傳已核准", html(f"✅ 已核准 {name}", f"身分已改成一般會員（{plan}，到期日 {expiry}），LINE 選單已換成會員版。"), "200", True)]),
@@ -256,54 +287,82 @@ def build_api():
     w_ident, w_menu, w_page = sp(W, "身分", ".name"), sp(W, "目前選單", ".name"), f"{{{{{W}.id}}}}"
     exist, none = c(f"{{{{{W}.id}}}}", "exist"), c(f"{{{{{W}.id}}}}", "notexist")
 
-    def body(state, src, extra):
+    # ==== 前台設定與方案：每次打開頁面都從 Notion 讀，原樣轉成 JSON 交給頁面解析 ====
+    site_api = b.notion_api("讀前台設定", f"/v1/pages/{SETTINGS_PAGE}")
+    site_json = b.to_json("前台設定轉 JSON", f"{{{{{site_api['id']}.body.properties}}}}")
+    plans_api = b.notion_api("讀上架的方案", f"/v1/data_sources/{PLANS_DS}/query", "POST", PLANS_QUERY)
+    plans_json = b.to_json("方案轉 JSON", f"{{{{{plans_api['id']}.body.results}}}}")
+    SITE = f'"site":{{{{{site_json["id"]}.json}}}},"plans":{{{{{plans_json["id"]}.json}}}}'
+
+    def body(state, src, extra, site=False):
         """回應頁面的會員資料。src(k) 給出申請欄位的 Make 運算式（自由文字要編碼）；extra 是方案、匯款、到期日（固定格式，不編碼）"""
         parts = ['"ok":true', f'"state":"{state}"', f'"line":"{{{{encodeURL({DISPLAY[2:-2]})}}}}"']
         parts += [f'"{k}":"{enc(src(k)) if src(k) else ""}"' for k, *_ in APPLY_FIELDS]
         parts += [f'"{k}":"{v}"' for k, v in extra.items()]
+        if site:
+            parts.append(SITE)
         return "{" + ",".join(parts) + "}"
     from_w = lambda k: sp(W, dict((a, n) for a, n, *_ in APPLY_FIELDS)[k], "" if k in ("phone", "email") else "[].plain_text")
     w_extra = {"plan": sp(W, "方案", ".name"), "pay5": sp(W, "匯款末五碼", "[].plain_text"),
                "paydate": sp(W, "匯款日期", ".start"), "expiry": sp(W, "到期日", ".start")}
     w_state = STATE % w_ident[2:-2]
-    # 非會員的姓名是「（LINE）顯示名稱」，不是本名，不回給頁面
-    me_body = body(w_state, lambda k: ('{{if(' + w_ident[2:-2] + ' = "非會員"; ""; ' + from_w(k)[2:-2] + ')}}') if k == "name" else from_w(k), w_extra)
+    # 非會員的姓名是「（LINE）顯示名稱」，不是本名，不回給頁面；「給會員的話」由管理者在名冊填
+    me_src = lambda k: ('{{if(' + w_ident[2:-2] + ' = "非會員"; ""; ' + from_w(k)[2:-2] + ')}}') if k == "name" else from_w(k)
+    me_body = body(w_state, me_src, w_extra)
+    message = '"message":"' + enc(sp(W, "給會員的話", "[].plain_text")) + '"'
+    me_site_body = body(w_state, me_src, w_extra, site=True)[:-1] + "," + message + "}"
 
-    me_flow = [b.router("我的身分（順便校正選單）", [
+    me_flow = [site_api, site_json, plans_api, plans_json, b.router("我的身分（順便校正選單）", [
         (flt("還沒有名冊", [[none]]), [
             b.create("新增非會員（頁面）", [fv("姓名", "title", "（LINE）" + DISPLAY), fv("身分", "select", "非會員"),
                                        fv("LINE 顯示名稱", "rich_text", DISPLAY), fv("LINE User ID", "rich_text", UID),
                                        fv("目前選單", "select", "訪客")]),
-            respond_json("回傳非會員", body("guest", lambda k: "", {k: "" for k in w_extra}))]),
+            respond_json("回傳非會員", body("guest", lambda k: "", {k: "" for k in w_extra}, site=True))]),
         # 先回應頁面再換選單：換選單出錯也不會讓頁面卡住
         (flt("會員但選單不是會員", is_member(w_ident, exist, c(w_menu, "text:notequal", "會員"))), [
-            respond_json("回傳我的身分（校正成會員選單）", me_body), *link_member(b, UID, w_page, "校正")]),
+            respond_json("回傳我的身分（校正成會員選單）", me_site_body), *link_member(b, UID, w_page, "校正")]),
         (flt("不是會員但選單是會員", [[exist, *not_member(w_ident), c(w_menu, "text:equal", "會員")]]), [
-            respond_json("回傳我的身分（校正成訪客選單）", me_body), *unlink(b, UID, w_page, "校正")]),
+            respond_json("回傳我的身分（校正成訪客選單）", me_site_body), *unlink(b, UID, w_page, "校正")]),
         (flt("選單正確", is_member(w_ident, exist, c(w_menu, "text:equal", "會員"))
              + [[exist, *not_member(w_ident), c(w_menu, "text:notequal", "會員")]]), [
-            respond_json("回傳我的身分", me_body)]),
+            respond_json("回傳我的身分", me_site_body)]),
     ])]
 
+    # ==== 申請入會：方案到「方案」表查，名稱、價格以 Notion 為準 ====
+    pl = b.notion_api("查申請的方案", f"/v1/data_sources/{PLANS_DS}/query", "POST", plan_query(PLAN_IN))
+    P = pl["id"]
+    plan_name, plan_price = np(P, "名稱", "title[1].plain_text"), np(P, "價格", "number")
+    has_plan = c(f"{{{{{P}.body.results[1].id}}}}", "exist")
     apply_fields = [fv(n, t, cut(f"1.{k}", ln)) for k, n, t, ln in APPLY_FIELDS]
-    apply_fields += [fv("方案", "select", PLAN), fv("應繳金額", "number", AMOUNT), fv("匯款末五碼", "rich_text", cut("1.pay5", 5)),
+    apply_fields += [fv("方案", "select", plan_name), fv("應繳金額", "number", plan_price), fv("匯款末五碼", "rich_text", cut("1.pay5", 5)),
                      date("匯款日期", "{{1.paydate}}"), fv("身分", "select", "審核中"), now("申請時間"),
                      fv("LINE 顯示名稱", "rich_text", DISPLAY)]
     pending_body = body("pending", lambda k: f"{{{{1.{k}}}}}",
-                        {"plan": PLAN, "pay5": "{{substring(1.pay5; 0; 5)}}", "paydate": "{{substring(1.paydate; 0; 10)}}", "expiry": ""})
-    apply_flow = [b.router("申請入會", [
-        (flt("新申請（還沒有名冊）", [[none]]), [
+                        {"plan": plan_name, "pay5": "{{substring(1.pay5; 0; 5)}}", "paydate": "{{substring(1.paydate; 0; 10)}}", "expiry": ""})
+    apply_flow = [pl, b.router("申請入會", [
+        (flt("方案不存在或已下架", [[c(f"{{{{{P}.body.results[1].id}}}}", "notexist")]]), [
+            respond_json("回傳方案不對", '{"ok":false,"error":"bad_plan"}', "400")]),
+        (flt("新申請（還沒有名冊）", [[has_plan, none]]), [
             b.create("新增名冊（審核中）", apply_fields + [fv("LINE User ID", "rich_text", UID), fv("目前選單", "select", "訪客")]),
             respond_json("回傳審核中（新）", pending_body)]),
         # 已到期的人用同一張表續費：送出後變審核中，核准時重新寫到期日
-        (flt("非會員、審核中或已到期：更新申請", [[exist, c(w_ident, "text:equal", t)] for t in ("非會員", "審核中", "已到期")]), [
+        (flt("非會員、審核中或已到期：更新申請", [[has_plan, exist, c(w_ident, "text:equal", t)] for t in ("非會員", "審核中", "已到期")]), [
             b.update("更新申請資料（審核中）", w_page, apply_fields), respond_json("回傳審核中", pending_body)]),
-        (flt("已是會員或停權", [[exist, *[c(w_ident, "text:notequal", t) for t in ("非會員", "審核中", "已到期")]]]), [
+        (flt("已是會員或停權", [[has_plan, exist, *[c(w_ident, "text:notequal", t) for t in ("非會員", "審核中", "已到期")]]]), [
             respond_json("回傳目前身分（申請）", me_body)]),
     ])]
 
+    # ==== 會員自己改基本資料：只寫姓名、電話、Email、備註；停權的人不能改 ====
+    profile_flow = [b.router("改基本資料", [
+        (flt("可以改", [[exist, c(w_ident, "text:notequal", "停權")]]), [
+            b.update("更新基本資料", w_page, [fv(n, t, cut(f"1.{k}", ln)) for k, n, t, ln in PROFILE_FIELDS]),
+            respond_json("回傳已更新", '{"ok":true}')]),
+        (flt("不能改", [[none], [exist, c(w_ident, "text:equal", "停權")]]), [
+            respond_json("回傳不能改", '{"ok":false,"error":"not_allowed"}', "403")]),
+    ])]
+
     act = lambda a: c("{{1.a}}", "text:equal", a)
-    PAGE_ACTS = ("me", "apply")
+    PAGE_ACTS = ("me", "apply", "profile")
     key_ok = c("{{1.k}}", "text:equal", KEY)
     flow = [
         webhook(MK["api_hook_id"], "會員頁面與核准連結送來的請求"),
@@ -320,6 +379,7 @@ def build_api():
                     (flt("身分驗證成功", [[c("{{2.data.client_id}}", "text:equal", CHANNEL)]]), [profile, w, b.router("依動作分流", [
                         (flt("我的身分", [[act("me")]]), me_flow),
                         (flt("申請入會", [[act("apply")]]), apply_flow),
+                        (flt("改基本資料", [[act("profile"), c("{{1.name}}", "exist"), c("{{1.phone}}", "exist")]]), profile_flow),
                     ])]),
                 ])]),
             (flt("格式不對", [[c("{{1.a}}", "notexist")],

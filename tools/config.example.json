@@ -12,7 +12,9 @@
     "liff_id": "會員頁面的 LIFF ID"
   },
   "notion": {
-    "data_source_id": "會員名冊的 data source ID（collection://… 後面那串）"
+    "data_source_id": "會員名冊的 data source ID（collection://… 後面那串）",
+    "settings_page_id": "「前台設定」那一列的頁面 ID",
+    "plans_data_source_id": "「方案」資料庫的 data source ID"
   },
   "approve_key": "隨機密鑰（也寫在 Notion 會員名冊的「核准按鈕」「套用身分按鈕」公式裡）",
   "page_origin": "https://philko2017.github.io",
