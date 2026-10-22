@@ -1,7 +1,7 @@
 // ===== 設定：LIFF ID 與 API 網址。正式網址（GitHub Pages）一律用真資料；本機預覽才載入 mock.js 的模擬資料 =====
 // 會員頁面送到 Make 情境「AI學院｜會員 API」，用欄位 a 分辨動作：me 我的身分（順便校正選單）｜apply 申請入會
 const CONFIG = {
-  liffId: "",    // 建好 LINE Login channel 的 LIFF 之後填入
+  liffId: "2012161136-mSmbv0VR",
   apiUrl: "",    // 建好 Make 情境「AI學院｜會員 API」之後填入 webhook 網址
 };
 const IN_LIFF_HOST = location.hostname.endsWith("github.io");
