@@ -19,10 +19,13 @@ const FIELDS = [
 ];
 // 匯款回報欄位（範例，不會真的收錢）
 const PAY_FIELDS = [["pay5", "匯款帳號末五碼", true, "text"], ["paydate", "匯款日期", true, "date"]];
-// 頁面狀態 → 標籤：非會員、審核中、一般會員、高級會員、停權
+// 頁面狀態 → 標籤：非會員、審核中、一般會員、高級會員、已到期、停權
 const BADGE = { guest: ["guest", "非會員"], pending: ["pending", "審核中"], member: ["member", "一般會員"],
-                premium: ["premium", "高級會員"], banned: ["banned", "暫停使用"] };
+                premium: ["premium", "高級會員"], expired: ["expired", "已到期"], banned: ["banned", "暫停使用"] };
 const IS_MEMBER = st => st === "member" || st === "premium";
+// 到期前幾天開始在會員畫面提醒；到期後還有幾天寬限（寬限期由 Make 每天的到期檢查執行）
+const REMIND_DAYS = 7, GRACE_DAYS = 3;
+const daysLeft = d => Math.round((new Date(d + "T00:00:00") - new Date(new Date().toDateString())) / 86400000);
 
 // ===== 正式後端：用表單格式送出，瀏覽器不會先送 CORS 預檢 =====
 class ApiError extends Error { constructor(code) { super(code); this.code = code; } }
@@ -82,12 +85,15 @@ const input = (k, label, req, type, f) => `<label class="f">${label}${req ? " <b
   ? `<textarea data-k="${k}">${esc(f[k])}</textarea>`
   : `<input data-k="${k}" type="${type}" value="${esc(f[k])}" ${k === "name" ? 'autocomplete="name"' : ""}${k === "pay5" ? ' inputmode="numeric" maxlength="5"' : ""}>`}</label>`;
 function renderApply() {
-  const editing = S.me.state === "pending";
+  const editing = S.me.state === "pending", renew = S.me.state === "expired";
   const f = S.form, bank = S.brand.bank || {};
   if (!planOf(f.plan) && plans()[0]) f.plan = plans()[0].id;
   const plan = planOf(f.plan);
-  $("#app").innerHTML = `<h1>${editing ? "修改入會申請" : "申請入會"}</h1>
-    <p class="lead">${editing ? "修改後重新送出，管理者會看到最新的資料。" : `歡迎加入${esc(S.brand.name || "")}。選擇方案、完成匯款並填寫資料，管理者確認入帳後，下方選單會換成會員版。`}</p>
+  const lead = editing ? "修改後重新送出，管理者會看到最新的資料。"
+    : renew ? `你的會籍已在 ${esc(S.me.expiry)} 到期。選擇方案、完成匯款，管理者確認入帳後就會恢復會員。`
+    : `歡迎加入${esc(S.brand.name || "")}。選擇方案、完成匯款並填寫資料，管理者確認入帳後，下方選單會換成會員版。`;
+  $("#app").innerHTML = `<h1>${editing ? "修改申請" : renew ? "續費" : "申請入會"}</h1>
+    <p class="lead">${lead}</p>
     <div class="card"><h2>① 選擇方案</h2><div class="plans">${plans().map(p => `<label class="plan ${p.id === f.plan ? "on" : ""}">
       <input type="radio" name="plan" value="${esc(p.id)}" ${p.id === f.plan ? "checked" : ""}>
       <span><b>${esc(p.label)}　${money(p.price)}</b><small>${esc(p.desc)}</small></span></label>`).join("")}</div></div>
@@ -99,7 +105,7 @@ function renderApply() {
     <div class="card"><h2>③ 基本資料</h2>${FIELDS.map(([k, label, req, type]) => input(k, label, req, type, f)).join("")}</div>
     ${editing ? `<button class="ghost" id="cancelEdit">← 不修改了</button>` : ""}`;
   $("#bar").hidden = false;
-  $("#barIn").innerHTML = `<button class="primary" id="send" ${S.busy ? "disabled" : ""}>${S.busy ? "送出中…" : editing ? "送出修改" : "送出申請"}</button>`;
+  $("#barIn").innerHTML = `<button class="primary" id="send" ${S.busy ? "disabled" : ""}>${S.busy ? "送出中…" : editing ? "送出修改" : renew ? "送出續費" : "送出申請"}</button>`;
 }
 function renderPending() {
   $("#app").innerHTML = `<div class="status"><div class="big">⏳</div><h2>入會申請審核中</h2>
@@ -111,12 +117,21 @@ function renderPending() {
 function renderMember() {
   $("#app").innerHTML = `<h1>${esc(S.me.name)}，歡迎回來</h1>
     <p class="lead">你是${esc(S.brand.name || "")}的${BADGE[S.me.state][1]}，下方選單是會員版。</p>
+    ${expiryNotice()}
     <div class="links">
       <a class="link" href="?v=courses"><span class="ic">📚</span><span><b>課程</b><small>即將推出</small></span></a>
       <a class="link" href="?v=ai"><span class="ic">✨</span><span><b>AI 小幫手</b><small>即將推出</small></span></a>
     </div>
     <div class="card"><h2>會籍</h2><dl><dt>方案</dt><dd>${esc(S.me.plan) || "—"}</dd><dt>到期日</dt><dd>${esc(S.me.expiry) || "—"}</dd></dl></div>
     <div class="card"><h2>我的會員資料</h2>${profile()}<p class="lead" style="margin-top:10px;font-size:14px">資料要修改請洽管理者。</p></div>`;
+}
+// 到期前 REMIND_DAYS 天開始提醒；不推播，只在會員畫面上顯示
+function expiryNotice() {
+  if (!S.me.expiry) return "";
+  const n = daysLeft(S.me.expiry);
+  if (n > REMIND_DAYS) return "";
+  const when = n > 0 ? `還有 ${n} 天，` : n === 0 ? "就是今天，" : `已過 ${-n} 天，`;
+  return `<div class="notice">會籍將於 <b>${esc(S.me.expiry)}</b> 到期（${when}到期後 ${GRACE_DAYS} 天內仍可使用）。請記得續費，續費請洽管理者。</div>`;
 }
 function renderBanned() {
   $("#app").innerHTML = `<div class="status"><div class="big">⛔</div><h2>會員功能暫停使用</h2>

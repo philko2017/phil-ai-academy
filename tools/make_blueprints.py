@@ -7,7 +7,7 @@
 - 會員_建立圖文選單.blueprint.json：「AI學院｜會員：建立圖文選單（手動執行）」訪客選單設為預設、會員選單設別名 member，
     清掉舊選單後把所有會員重新綁到新的會員選單
 
-身分與選單：非會員、審核中、停權 → 訪客選單（預設，不綁個人）；一般會員、高級會員 → 會員選單（別名 member，綁個人）。
+身分與選單：非會員、審核中、已到期、停權 → 訪客選單（預設，不綁個人）；一般會員、高級會員 → 會員選單（別名 member，綁個人）。
 所有換選單的動作最後都把「目前選單」「選單同步時間」寫回 Notion，打開會員頁面時發現對不上就自動校正。
 核准時身分一律改成一般會員，到期日依方案算（月繳一個月、年繳一年）；高級會員由管理者在 Notion 手動改，再點「套用身分」。
 
@@ -36,13 +36,13 @@ ALIAS = "member"
 COLS, ROW = [0, 833, 1667, 2500], 843
 MEMBER_TIERS = ("一般會員", "高級會員")
 # 身分 → 頁面上的狀態代號（liff/member/app.js 的 BADGE）
-STATE = '{{switch(%s; "審核中"; "pending"; "一般會員"; "member"; "高級會員"; "premium"; "停權"; "banned"; "guest")}}'
+STATE = '{{switch(%s; "審核中"; "pending"; "一般會員"; "member"; "高級會員"; "premium"; "已到期"; "expired"; "停權"; "banned"; "guest")}}'
 # 申請表單欄位：頁面代號、Notion 欄位、型別、長度上限（和 liff/member/app.js 的 FIELDS 對應）
 APPLY_FIELDS = [("name", "姓名", "title", 60), ("phone", "電話", "phone_number", 40), ("email", "Email", "email", 120),
                 ("note", "備註", "rich_text", 1000)]
 # 方案只接受這兩個值，其他一律當成月繳（頁面送來的值不直接寫進 Notion）
-PLAN = '{{if(1.plan = "全年 3600"; "全年 3600"; "首月 699")}}'
-AMOUNT = '{{if(1.plan = "全年 3600"; 3600; 699)}}'
+PLAN = '{{if(1.plan = "年繳 3600"; "年繳 3600"; "月繳 699")}}'
+AMOUNT = '{{if(1.plan = "年繳 3600"; 3600; 699)}}'
 
 # HTTP「Make a request」模組的必填設定。用 API 建立時不會自動帶入，少了會報 BundleValidationError（苗栗踩過）
 HTTP_DEFAULTS = {"rejectUnauthorized": True, "followRedirect": True, "followAllRedirects": False, "useQuerystring": False,
@@ -222,8 +222,8 @@ def build_api():
         no_line = (flt(f"沒有 LINE 帳號（{action}）", [[c(uid, "notexist")]]), [
             b.respond(f"回傳沒有 LINE（{action}）", html("⚠ 這筆沒有 LINE 帳號", "這位不是從 LINE 加入的，無法換選單。"), "400", True)])
         if action == "approve":
-            # 到期日從核准當天起算：年繳一年，其他（首月、續月）一個月
-            expiry = "{{formatDate(if(" + plan[2:-2] + ' = "全年 3600"; addYears(now; 1); addMonths(now; 1)); "YYYY-MM-DD")}}'
+            # 到期日從核准當天起算：年繳一年，月繳一個月
+            expiry = "{{formatDate(if(" + plan[2:-2] + ' = "年繳 3600"; addYears(now; 1); addMonths(now; 1)); "YYYY-MM-DD")}}'
             return [g, b.router("可否核准", [
                 (flt("審核中，核准", [[c(ident, "text:equal", "審核中"), c(uid, "exist")]]), [
                     b.update("改成一般會員", page, [fv("身分", "select", "一般會員"), now("核准時間"), date("到期日", expiry)]),
@@ -295,9 +295,10 @@ def build_api():
         (flt("新申請（還沒有名冊）", [[none]]), [
             b.create("新增名冊（審核中）", apply_fields + [fv("LINE User ID", "rich_text", UID), fv("目前選單", "select", "訪客")]),
             respond_json("回傳審核中（新）", pending_body)]),
-        (flt("非會員或審核中：更新申請", [[exist, c(w_ident, "text:equal", "非會員")], [exist, c(w_ident, "text:equal", "審核中")]]), [
+        # 已到期的人用同一張表續費：送出後變審核中，核准時重新寫到期日
+        (flt("非會員、審核中或已到期：更新申請", [[exist, c(w_ident, "text:equal", t)] for t in ("非會員", "審核中", "已到期")]), [
             b.update("更新申請資料（審核中）", w_page, apply_fields), respond_json("回傳審核中", pending_body)]),
-        (flt("已是會員或停權", [[exist, c(w_ident, "text:notequal", "非會員"), c(w_ident, "text:notequal", "審核中")]]), [
+        (flt("已是會員或停權", [[exist, *[c(w_ident, "text:notequal", t) for t in ("非會員", "審核中", "已到期")]]]), [
             respond_json("回傳目前身分（申請）", me_body)]),
     ])]
 
