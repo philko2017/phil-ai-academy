@@ -1,0 +1,20 @@
+{
+  "_說明": "複製成 config.local.json 再填入自己的編號。project 是 Make 情境名稱的前綴（填「AI學院」會變成「AI學院｜會員 API」）",
+  "project": "AI學院",
+  "make": {
+    "notion_connection_id": 0,
+    "line_connection_id": 0,
+    "api_hook_id": 0,
+    "events_hook_id": 0
+  },
+  "line": {
+    "login_channel_id": "LINE Login channel 的 Channel ID",
+    "liff_id": "會員頁面的 LIFF ID"
+  },
+  "notion": {
+    "data_source_id": "會員名冊的 data source ID（collection://… 後面那串）"
+  },
+  "approve_key": "隨機密鑰（也寫在 Notion 會員名冊的「核准按鈕」「套用身分按鈕」公式裡）",
+  "page_origin": "https://philko2017.github.io",
+  "repo": "phil-ai-academy"
+}

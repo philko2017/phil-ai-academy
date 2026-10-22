@@ -1,0 +1,6 @@
+# 實際 ID 與產生出來的藍圖（含 webhook、連線編號、核准密鑰）不進版本庫
+tools/config.local.json
+make/**/*.blueprint.json
+.claude/
+__pycache__/
+.DS_Store
