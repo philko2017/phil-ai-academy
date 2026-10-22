@@ -47,8 +47,9 @@ APPLY_FIELDS = [("name", "姓名", "title", 60), ("phone", "電話", "phone_numb
                 ("note", "備註", "rich_text", 1000)]
 # 會員可以自己改的欄位（寫入限制：身分、方案、到期日等都不能改）
 PROFILE_FIELDS = APPLY_FIELDS
-# 頁面送來的方案名稱只留中英數和空白，再拿去「方案」表找；找不到就不收（價格、會籍長度一律以 Notion 為準）
-PLAN_IN = "{{replace(substring(1.plan; 0; 40); /[^0-9A-Za-z\\u4e00-\\u9fff ]/g; \"\")}}"
+# 頁面送來的方案名稱拿去「方案」表找，找不到就不收（價格、會籍長度一律以 Notion 為準）。
+# 名稱會放進送給 Notion 的 JSON，含引號或反斜線的直接拒收（Make 的公式不支援正規表示式的 [ ]，不能用 replace 清掉）
+PLAN_IN = "{{substring(1.plan; 0; 40)}}"
 PLANS_QUERY = '{"filter":{"and":[{"property":"上架","checkbox":{"equals":true}}]},"sorts":[{"property":"排序","direction":"ascending"}]}'
 
 
@@ -166,12 +167,12 @@ class B:
             d["onerror"] = onerror
         return d
 
-    def notion_api(self, name, url, method="GET", body=None):
+    def notion_api(self, name, url, method="GET", body=None, onerror=None):
         mapper = {"url": url, "version": NOTION_VERSION, "method": method,
                   "headers": [{"key": "Content-Type", "value": "application/json"}], "qs": []}
         if body is not None:
             mapper["body"] = body
-        return self.notion("makeApiCall", name, mapper)
+        return self.notion("makeApiCall", name, mapper, onerror)
 
     def to_json(self, name, obj):
         return {"id": self.nid(), "module": "json:TransformToJSON", "version": 1, "parameters": {"space": ""},
@@ -251,7 +252,8 @@ def build_api():
             b.respond(f"回傳沒有 LINE（{action}）", html("⚠ 這筆沒有 LINE 帳號", "這位不是從 LINE 加入的，無法換選單。"), "400", True)])
         if action == "approve":
             # 到期日從核准當天起算，月數讀「方案」表的「會籍月數」（找不到就算一個月）
-            pl = b.notion_api("讀方案的會籍月數", f"/v1/data_sources/{PLANS_DS}/query", "POST", plan_query(plan))
+            pl = b.notion_api("讀方案的會籍月數", f"/v1/data_sources/{PLANS_DS}/query", "POST", plan_query(plan),
+                              onerror=[b.respond("回傳讀不到方案", html("⚠ 讀不到方案", "請確認 Notion「方案」表有開放給 Make，再點一次核准。"), "500", True), b.ignore()])
             months = np(pl["id"], "會籍月數", "number")
             expiry = "{{formatDate(addMonths(now; ifempty(" + months[2:-2] + "; 1)); \"YYYY-MM-DD\")}}"
             return [g, b.router("可否核准", [
@@ -329,7 +331,8 @@ def build_api():
     ])]
 
     # ==== 申請入會：方案到「方案」表查，名稱、價格以 Notion 為準 ====
-    pl = b.notion_api("查申請的方案", f"/v1/data_sources/{PLANS_DS}/query", "POST", plan_query(PLAN_IN))
+    pl = b.notion_api("查申請的方案", f"/v1/data_sources/{PLANS_DS}/query", "POST", plan_query(PLAN_IN),
+                      onerror=[respond_json("回傳查不到方案", '{"ok":false,"error":"bad_plan"}', "400"), b.ignore()])
     P = pl["id"]
     plan_name, plan_price = np(P, "名稱", "title[1].plain_text"), np(P, "價格", "number")
     has_plan = c(f"{{{{{P}.body.results[1].id}}}}", "exist")
@@ -339,7 +342,7 @@ def build_api():
                      fv("LINE 顯示名稱", "rich_text", DISPLAY)]
     pending_body = body("pending", lambda k: f"{{{{1.{k}}}}}",
                         {"plan": plan_name, "pay5": "{{substring(1.pay5; 0; 5)}}", "paydate": "{{substring(1.paydate; 0; 10)}}", "expiry": ""})
-    apply_flow = [pl, b.router("申請入會", [
+    apply_route = [pl, b.router("申請入會", [
         (flt("方案不存在或已下架", [[c(f"{{{{{P}.body.results[1].id}}}}", "notexist")]]), [
             respond_json("回傳方案不對", '{"ok":false,"error":"bad_plan"}', "400")]),
         (flt("新申請（還沒有名冊）", [[has_plan, none]]), [
@@ -350,6 +353,13 @@ def build_api():
             b.update("更新申請資料（審核中）", w_page, apply_fields), respond_json("回傳審核中", pending_body)]),
         (flt("已是會員或停權", [[has_plan, exist, *[c(w_ident, "text:notequal", t) for t in ("非會員", "審核中", "已到期")]]]), [
             respond_json("回傳目前身分（申請）", me_body)]),
+    ])]
+
+    plan_safe = [[c("{{1.plan}}", "text:notcontain", '"'), c("{{1.plan}}", "text:notcontain", "\\")]]
+    plan_unsafe = [[c("{{1.plan}}", "text:contain", '"')], [c("{{1.plan}}", "text:contain", "\\")]]
+    apply_flow = [b.router("檢查方案名稱", [
+        (flt("方案名稱有引號或反斜線", plan_unsafe), [respond_json("回傳方案不對（格式）", '{"ok":false,"error":"bad_plan"}', "400")]),
+        (flt("方案名稱正常", plan_safe), apply_route),
     ])]
 
     # ==== 會員自己改基本資料：只寫姓名、電話、Email、備註；停權的人不能改 ====
