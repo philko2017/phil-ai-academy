@@ -2,7 +2,7 @@
 // 會員頁面送到 Make 情境「AI學院｜會員 API」，用欄位 a 分辨動作：me 我的身分（順便校正選單）｜apply 申請入會
 const CONFIG = {
   liffId: "2012161136-mSmbv0VR",
-  apiUrl: "",    // 建好 Make 情境「AI學院｜會員 API」之後填入 webhook 網址
+  apiUrl: "https://hook.us2.make.com/vbwwyt6hjrveqmylu42gkovs2ulf9jdm",
 };
 const IN_LIFF_HOST = location.hostname.endsWith("github.io");
 // 學院名稱、介紹、方案、收款帳戶放在 assets/brand/brand.json
