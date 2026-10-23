@@ -23,6 +23,7 @@
 """
 import json
 import sys
+from urllib.parse import quote
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +37,8 @@ PLANS_DS = CFG["notion"]["plans_data_source_id"]
 CONTENT_DS = CFG["notion"]["content_data_source_id"]    # 內容庫（最新消息、課程、數位產品都在這裡，用「標籤」分）
 # 內容庫列表回傳的欄位（Notion 欄位 ID）：除了「內容連結」都要，連結只在點開時依身分給
 CONTENT_LIST_PROPS = CFG["notion"]["content_list_property_ids"]
+# 欄位清單直接寫進網址：Make 的 qs 遇到同名參數只留最後一個（2026-10-23 列表只剩「標籤」一個欄位）
+LIST_QS = "&".join("filter_properties=" + quote(pid, safe="") for pid in CONTENT_LIST_PROPS)
 NOTION_VERSION = "2025-09-03"   # 查詢 data source（/v1/data_sources/…/query）要這個版本
 KEY = CFG["approve_key"]
 CHANNEL = LN["login_channel_id"]
@@ -402,8 +405,7 @@ def build_api():
     def list_flow(tag, key, sort):
         q = ('{"filter":{"and":[{"property":"上架狀態","select":{"equals":"上架"}},{"property":"標籤","multi_select":{"contains":"' + tag
              + '"}}]},"sorts":[' + sort + '],"page_size":100}')
-        api = b.notion_api(f"讀內容庫（{tag}）", f"/v1/data_sources/{CONTENT_DS}/query", "POST", q)
-        api["mapper"]["qs"] = [{"key": "filter_properties[]", "value": pid} for pid in CONTENT_LIST_PROPS]
+        api = b.notion_api(f"讀內容庫（{tag}）", f"/v1/data_sources/{CONTENT_DS}/query?{LIST_QS}", "POST", q)
         js = b.to_json(f"{tag}轉 JSON", f"{{{{{api['id']}.body.results}}}}")
         return [api, js, respond_json(f"回傳{tag}", f'{{"ok":true,"{key}":{{{{{js["id"]}.json}}}}}}')]
     news_flow = list_flow("最新消息", "news", '{"property":"上架日期","direction":"descending"}')
