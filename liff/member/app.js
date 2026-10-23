@@ -36,10 +36,19 @@ function nval(p) {
     case "number": return p.number;
     case "checkbox": return p.checkbox;
     case "select": return p.select ? p.select.name : "";
+    case "multi_select": return (p.multi_select || []).map(o => o.name);
+    case "date": return p.date ? p.date.start : "";
+    case "url": return p.url || "";
+    case "email": return p.email || "";
+    case "phone_number": return p.phone_number || "";
+    // 檔案和媒體：取第一個檔案的網址（上傳到 Notion 的檔案網址約一小時後失效，每次打開都會重新拿）
+    case "files": { const f = (p.files || [])[0]; return f ? (f.file ? f.file.url : f.external ? f.external.url : "") : ""; }
     default: return "";
   }
 }
 const nobj = props => Object.fromEntries(Object.entries(props || {}).map(([k, v]) => [k, nval(v)]));
+// Notion 查詢結果（頁面陣列）→ { id, 欄位… }
+const nrows = rows => (rows || []).map(r => ({ id: r.id, ...nobj(r.properties) }));
 // 「{姓名}」「{身分}」「{到期日}」換成這位會員的資料
 const fill = (tpl, me) => esc(tpl || "").replace(/\{姓名\}/g, esc(me.name || me.line || ""))
   .replace(/\{身分\}/g, esc((BADGE[me.state] || [])[1] || "")).replace(/\{到期日\}/g, esc(me.expiry || ""));
@@ -47,7 +56,7 @@ const fill = (tpl, me) => esc(tpl || "").replace(/\{姓名\}/g, esc(me.name || m
 // ===== 正式後端：用表單格式送出，瀏覽器不會先送 CORS 預檢 =====
 class ApiError extends Error { constructor(code) { super(code); this.code = code; } }
 // 後端把自由文字 URL 編碼後才放進 JSON（Make 沒有 JSON 跳脫函式），這裡解碼
-const ENC_KEYS = new Set(["name", "phone", "email", "note", "line", "message"]);
+const ENC_KEYS = new Set(["name", "phone", "email", "note", "line", "message", "link", "trial"]);
 const safeDecode = s => { try { return decodeURIComponent(s); } catch (e) { return s; } };
 async function post(fields) {
   const token = liff.getAccessToken();
@@ -59,14 +68,19 @@ async function post(fields) {
   for (const k of Object.keys(data)) if (ENC_KEYS.has(k) && typeof data[k] === "string") data[k] = safeDecode(data[k]);
   return data;
 }
-let api = { me: () => post({ a: "me" }), apply: f => post({ a: "apply", ...f }), profile: f => post({ a: "profile", ...f }) };
+let api = { me: () => post({ a: "me" }), apply: f => post({ a: "apply", ...f }), profile: f => post({ a: "profile", ...f }),
+  news: () => post({ a: "news" }), courses: () => post({ a: "courses" }), open: id => post({ a: "course_open", id }),
+  adminList: () => post({ a: "admin_list" }), adminSet: (id, op) => post({ a: "admin_set", id, op }) };
 
 // ===== 狀態與畫面 =====
 const params = new URLSearchParams(location.search);
-// 選單上的功能還在規劃，先顯示「即將推出」；說明文字在 Notion「前台設定」
-const SOON = { courses: ["📚", "課程", "課程預告"], ai: ["✨", "AI 小幫手", "AI 小幫手預告"] };
+// 還在規劃的功能先顯示「即將推出」；說明文字在 Notion「前台設定」
+const SOON = { ai: ["✨", "AI 小幫手", "AI 小幫手預告"] };
+const VIEWS = ["home", "about", "news", "courses", "admin", ...Object.keys(SOON)];
 const V = params.get("v");
-const S = { view: V === "about" || SOON[V] ? V : "home", me: null, site: {}, plans: [], form: {}, busy: false, editing: false, profileEdit: false };
+const S = { view: VIEWS.includes(V) ? V : "home", id: params.get("id") || "", me: null, site: {}, plans: [], form: {},
+            busy: false, editing: false, profileEdit: false, news: null, items: null, members: null, q: "", sel: "" };
+const IS_ADMIN = () => S.me && S.me.admin === "Y";
 const planOf = name => S.plans.find(p => p.name === name);
 
 function render() {
@@ -76,6 +90,9 @@ function render() {
   $("#bar").hidden = true;
   if (!S.me) { $("#app").innerHTML = `<p class="blocked">讀取中…</p>`; return; }
   if (S.view === "about") return renderAbout();
+  if (S.view === "news") return renderNews();
+  if (S.view === "courses") return S.id ? renderCourse() : renderCourses();
+  if (S.view === "admin") return renderAdmin();
   if (SOON[S.view]) return renderSoon(SOON[S.view]);
   const st = S.me.state;
   if (S.profileEdit) return renderProfileEdit();
@@ -93,7 +110,118 @@ function renderAbout() {
 function renderSoon([icon, title, key]) {
   $("#app").innerHTML = `<div class="status"><div class="big">${icon}</div><h2>${title}</h2><p class="lead">${esc(S.site[key])}</p>
     <p class="lead" style="margin-top:14px;font-weight:700;color:var(--brand)">即將推出</p></div>
-    <div class="links"><a class="link" href="?v=home"><span class="ic">🪪</span><span><b>會員專區</b><small>入會申請、我的會員資料</small></span></a></div>`;
+    <div class="links">${navLink("home", "🪪", "會員專區", "入會申請、我的會員資料")}</div>`;
+}
+const navLink = (v, ic, title, sub, id = "") => `<a class="link" href="?v=${v}${id ? "&id=" + id : ""}" data-nav="${v}" data-id="${esc(id)}"><span class="ic">${ic}</span><span><b>${esc(title)}</b><small>${esc(sub)}</small></span></a>`;
+const cover = (url, alt) => url ? `<img class="cover" src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy">` : "";
+// 有沒有權限看某個開放對象的內容（Make 點開時會再檢查一次）
+function canSee(aud) {
+  if (IS_ADMIN() || aud === "公開") return true;
+  const st = S.me.state;
+  if (aud === "一般會員") return IS_MEMBER(st);
+  if (aud === "高級會員") return st === "premium";
+  return false;
+}
+// 進一步的資料（消息、課程、名冊）切換畫面時才讀，讀過就留著，不必重新整理頁面
+async function need(key, call, pick) {
+  if (S[key]) return true;
+  try { S[key] = nrows(pick(await call())); return true; }
+  catch (e) { if (!handleApiError(e)) $("#app").innerHTML = `<div class="blocked"><h2>暫時無法讀取</h2><p>請稍後再開一次。</p></div>`; return false; }
+}
+function go(view, id = "") {
+  S.view = view; S.id = id; S.profileEdit = false;
+  history.replaceState(null, "", `?v=${view}${id ? "&id=" + id : ""}`);
+  render(); scrollTo(0, 0);
+}
+
+// ===== 最新消息 =====
+function renderNews() {
+  if (!S.news) { $("#app").innerHTML = `<p class="blocked">讀取中…</p>`; need("news", api.news, r => r.news).then(ok => ok && render()); return; }
+  $("#app").innerHTML = `<h1>最新消息</h1>${S.news.length ? S.news.map(n => `<article class="card post">${cover(n["封面"], n["標題"])}
+      <p class="meta">${esc(n["發布日期"])}${n["對象"] === "會員" ? ` · <span class="tag">會員</span>` : ""}</p>
+      <h2>${esc(n["標題"])}</h2><p class="body">${esc(n["內文"])}</p>
+      ${n["連結"] ? `<a class="ghost" href="${esc(n["連結"])}" target="_blank" rel="noopener">看更多 →</a>` : ""}</article>`).join("")
+    : `<p class="blocked">目前沒有消息</p>`}`;
+}
+
+// ===== 課程與數位產品 =====
+function renderCourses() {
+  if (!S.items) { $("#app").innerHTML = `<p class="blocked">讀取中…</p>`; need("items", api.courses, r => r.items).then(ok => ok && render()); return; }
+  const title = IS_MEMBER(S.me.state) || IS_ADMIN() ? "我的課程" : "課程介紹";
+  $("#app").innerHTML = `<h1>${title}</h1>
+    ${S.items.length ? `<div class="grid">${S.items.map(it => { const ok = canSee(it["開放對象"]); return `<a class="card item" href="?v=courses&id=${it.id}" data-nav="courses" data-id="${it.id}">
+      <div class="cover-wrap">${cover(it["封面"], it["標題"]) || `<div class="cover ph">${esc(it["類型"])}</div>`}${ok ? "" : `<span class="lock">🔒 ${esc(it["開放對象"] === "單獨購買" ? money(it["價格"]) : it["開放對象"] + "專屬")}</span>`}</div>
+      <p class="meta">${esc(it["類型"])}</p><h2>${esc(it["標題"])}</h2><p class="lead">${esc(it["公開摘要"])}</p></a>`; }).join("")}</div>`
+    : `<p class="blocked">${esc(S.site["課程預告"] || "課程準備中")}</p>`}`;
+}
+function renderCourse() {
+  if (!S.items) { $("#app").innerHTML = `<p class="blocked">讀取中…</p>`; need("items", api.courses, r => r.items).then(ok => ok && render()); return; }
+  const it = S.items.find(x => x.id.replace(/-/g, "") === S.id.replace(/-/g, ""));
+  if (!it) { $("#app").innerHTML = `<div class="blocked"><h2>找不到這個內容</h2></div><div class="links">${navLink("courses", "📚", "回課程列表", "")}</div>`; return; }
+  const aud = it["開放對象"], ok = canSee(aud), st = S.me.state;
+  const cta = ok ? `<button class="primary" id="openItem">${it["類型"] === "數位產品" ? "下載" : "開始觀看"}</button>`
+    : aud === "單獨購買" ? `<button class="primary" disabled>購買 ${money(it["價格"])}（即將推出）</button>`
+    : IS_MEMBER(st) ? `<p class="notice">這是高級會員專屬內容，升級請洽管理者。</p>`
+    : `<a class="primary btn" href="?v=home" data-nav="home">申請加入，解鎖課程</a>`;
+  $("#app").innerHTML = `<div class="detail">${cover(it["封面"], it["標題"]) || `<div class="cover ph">${esc(it["類型"])}</div>`}
+    <p class="meta">${esc(it["類型"])} · ${esc(aud)}</p><h1>${esc(it["標題"])}</h1><p class="lead">${esc(it["公開摘要"])}</p>
+    <div class="cta">${cta}${!ok && it["試看連結"] ? `<a class="ghost" href="${esc(it["試看連結"])}" target="_blank" rel="noopener">先試看 →</a>` : ""}</div></div>
+    <div class="links">${navLink("courses", "📚", "回課程列表", "")}</div>`;
+}
+async function openItem() {
+  if (S.busy) return;
+  S.busy = true; $("#openItem").disabled = true; $("#openItem").textContent = "開啟中…";
+  try {
+    const r = await api.open(S.id);
+    if (!r.link) throw new ApiError("no_link");
+    if (window.liff && liff.isInClient && liff.isInClient()) liff.openWindow({ url: r.link, external: false }); else location.href = r.link;
+  } catch (e) {
+    if (!handleApiError(e)) toast(e.code === "locked" ? "這個內容需要更高的身分才能看" : e.code === "no_link" ? "這個內容還沒放連結" : "開啟失敗，請再試一次");
+  }
+  S.busy = false; render();
+}
+
+// ===== 管理會員（名冊「角色」勾管理者的人才看得到；Make 每個動作都會再檢查）=====
+const IDENTS = ["非會員", "審核中", "一般會員", "高級會員", "已到期", "停權"];
+const OPS = { 審核中: [["approve", "核准入會"]], 一般會員: [["premium", "升級高級會員"], ["ban", "停權"]],
+              高級會員: [["ban", "停權"]], 已到期: [["ban", "停權"]], 停權: [["restore", "恢復為一般會員"]], 非會員: [["ban", "停權"]] };
+const OP_DONE = { approve: "一般會員", premium: "高級會員", ban: "停權", restore: "一般會員" };
+function renderAdmin() {
+  if (!IS_ADMIN()) { $("#app").innerHTML = `<div class="blocked"><h2>只有管理者可以使用</h2></div>`; return; }
+  if (!S.members) { $("#app").innerHTML = `<p class="blocked">讀取名冊中…</p>`; need("members", api.adminList, r => r.members).then(ok => ok && render()); return; }
+  const m = S.members;
+  const count = id => m.filter(x => x["身分"] === id).length;
+  $("#app").innerHTML = `<h1>管理會員</h1>
+    <div class="stats"><div class="stat total"><b>${m.length}</b><small>全部</small></div>${IDENTS.map(i => `<div class="stat${i === "審核中" && count(i) ? " hot" : ""}"><b>${count(i)}</b><small>${i}</small></div>`).join("")}</div>
+    <label class="f search"><input id="q" type="search" placeholder="搜尋姓名、電話、Email、LINE 名稱" value="${esc(S.q)}"></label>
+    <div class="rows" id="rows">${adminRows()}</div>
+    <div class="links">${navLink("home", "🪪", "回會員專區", "")}</div>`;
+  // 打字時只換名冊，不重畫搜尋框，中文輸入法選字才不會被打斷
+  $("#q").oninput = e => { S.q = e.target.value; $("#rows").innerHTML = adminRows(); };
+}
+function adminRows() {
+  const q = S.q.trim().toLowerCase();
+  const hit = x => !q || ["姓名", "電話", "Email", "LINE 顯示名稱"].some(k => String(x[k] || "").toLowerCase().includes(q));
+  const order = x => (x["身分"] === "審核中" ? 0 : 1);
+  return S.members.filter(hit).sort((a, b) => order(a) - order(b)).map(x => `<div class="row${x.id === S.sel ? " open" : ""}" data-sel="${x.id}">
+      <div class="row-head"><b>${esc(x["姓名"])}</b><span class="badge ${badgeOf(x["身分"])}">${esc(x["身分"])}</span>${(x["角色"] || []).includes("管理者") ? `<span class="tag">管理者</span>` : ""}</div>
+      <small>${esc([x["電話"], x["方案"], x["到期日"] && "到期 " + x["到期日"]].filter(Boolean).join(" · "))}</small>
+      ${x.id === S.sel ? adminDetail(x) : ""}</div>`).join("") || `<p class="blocked">找不到符合的人</p>`;
+}
+const badgeOf = id => ({ 非會員: "guest", 審核中: "pending", 一般會員: "member", 高級會員: "premium", 已到期: "expired", 停權: "banned" }[id] || "guest");
+function adminDetail(x) {
+  const info = [["LINE 名稱", x["LINE 顯示名稱"]], ["Email", x["Email"]], ["方案", x["方案"]], ["應繳", x["應繳金額"] ? money(x["應繳金額"]) : ""],
+                ["末五碼", x["匯款末五碼"]], ["匯款日期", x["匯款日期"]], ["申請", (x["申請時間"] || "").slice(0, 10)], ["到期日", x["到期日"]],
+                ["好友狀態", x["好友狀態"]], ["備註", x["備註"]]].filter(([, v]) => v);
+  return `<dl class="info">${info.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+    <div class="ops">${(OPS[x["身分"]] || []).map(([op, label]) => `<button class="op ${op}" data-op="${op}" data-id="${x.id}">${label}</button>`).join("")}</div>`;
+}
+async function adminOp(id, op) {
+  const x = S.members.find(m => m.id === id);
+  const label = (OPS[x["身分"]] || []).find(o => o[0] === op)[1];
+  if (!confirm(`${label}：${x["姓名"]}？`)) return;
+  try { await api.adminSet(id, op); x["身分"] = OP_DONE[op]; toast(`已${label}`); render(); }
+  catch (e) { if (!handleApiError(e)) toast(e.code === "not_allowed" ? "這個身分不能做這個動作，請重新整理" : "操作失敗，請再試一次"); }
 }
 const input = (k, label, req, type, f) => `<label class="f">${label}${req ? " <b>*</b>" : ""}${type === "area"
   ? `<textarea data-k="${k}">${esc(f[k])}</textarea>`
@@ -104,7 +232,7 @@ function renderApply() {
   if (!planOf(f.plan) && S.plans[0]) f.plan = S.plans[0].name;
   const plan = planOf(f.plan);
   const lead = editing ? "修改後重新送出，管理者會看到最新的資料。" : fill(renew ? s["已到期說明"] : s["申請說明"], S.me);
-  $("#app").innerHTML = `<h1>${editing ? "修改申請" : renew ? "續費" : "申請入會"}</h1>
+  $("#app").innerHTML = `${editing ? "" : cover(s["邀請圖"], "邀請加入")}<h1>${editing ? "修改申請" : renew ? "續費" : "申請入會"}</h1>
     <p class="lead">${lead}</p>
     <div class="card"><h2>① 選擇方案</h2><div class="plans">${S.plans.map(p => `<label class="plan ${p.name === f.plan ? "on" : ""}">
       <input type="radio" name="plan" value="${esc(p.name)}" ${p.name === f.plan ? "checked" : ""}>
@@ -133,8 +261,10 @@ function renderMember() {
     ${expiryNotice()}
     ${S.me.message ? `<div class="card"><h2>給你的話</h2><p>${esc(S.me.message)}</p></div>` : ""}
     <div class="links">
-      <a class="link" href="?v=courses"><span class="ic">📚</span><span><b>課程</b><small>即將推出</small></span></a>
-      <a class="link" href="?v=ai"><span class="ic">✨</span><span><b>AI 小幫手</b><small>即將推出</small></span></a>
+      ${IS_ADMIN() ? navLink("admin", "🛠", "管理會員", "核准、升級、停權、恢復") : ""}
+      ${navLink("news", "📰", "最新消息", "公告與活動")}
+      ${navLink("courses", "📚", "我的課程", "影片與數位產品")}
+      ${navLink("ai", "✨", "AI 小幫手", "即將推出")}
     </div>
     <div class="card"><h2>會籍</h2><dl><dt>方案</dt><dd>${esc(S.me.plan) || "—"}</dd><dt>到期日</dt><dd>${esc(S.me.expiry) || "—"}</dd></dl></div>
     <div class="card"><h2>我的會員資料</h2>${profile()}</div>
@@ -185,7 +315,15 @@ function checkBasic(f) {
 document.addEventListener("input", e => { if (e.target.dataset.k) S.form[e.target.dataset.k] = e.target.value; });
 document.addEventListener("change", e => { if (e.target.name === "plan") { S.form.plan = e.target.value; render(); } });
 document.addEventListener("click", async e => {
+  // 頁面內切換畫面：不重新整理，省下重新讀身分的 Make 點數
+  const nav = e.target.closest("[data-nav]");
+  if (nav) { e.preventDefault(); go(nav.dataset.nav, nav.dataset.id || ""); return; }
+  const op = e.target.closest("[data-op]");
+  if (op) { adminOp(op.dataset.id, op.dataset.op); return; }
+  const row = e.target.closest("[data-sel]");
+  if (row && !e.target.closest("button, input")) { S.sel = S.sel === row.dataset.sel ? "" : row.dataset.sel; $("#rows").innerHTML = adminRows(); return; }
   const t = e.target.closest("button"); if (!t) return;
+  if (t.id === "openItem") { openItem(); return; }
   if (t.id === "edit") { S.editing = true; render(); return; }
   if (t.id === "cancelEdit") { S.editing = false; render(); return; }
   if (t.id === "profileEdit") { S.profileEdit = true; render(); scrollTo(0, 0); return; }

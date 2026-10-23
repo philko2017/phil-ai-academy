@@ -14,7 +14,12 @@
   "notion": {
     "data_source_id": "會員名冊的 data source ID（collection://… 後面那串）",
     "settings_page_id": "「前台設定」那一列的頁面 ID",
-    "plans_data_source_id": "「方案」資料庫的 data source ID"
+    "plans_data_source_id": "「方案」資料庫的 data source ID",
+    "news_data_source_id": "（最新消息的 data source ID）",
+    "content_data_source_id": "（內容庫的 data source ID）",
+    "content_list_property_ids": [
+      "（內容庫除了「內容連結」「備註」以外的欄位 ID）"
+    ]
   },
   "approve_key": "隨機密鑰（也寫在 Notion 會員名冊的「核准按鈕」「套用身分按鈕」公式裡）",
   "page_origin": "https://philko2017.github.io",
