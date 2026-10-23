@@ -596,7 +596,7 @@ def qs_props(ids):
 
 
 def assistant_close(b, R, uid, reason, seq_cond):
-    """結束一場對話：先關掉暫存，再請 Gemini 整理分析，寫進對話紀錄（含全文）。R 是暫存紀錄的模組編號"""
+    """結束一場對話：先關掉暫存；有問過問題才請 Gemini 整理分析，寫進對話紀錄（含全文）。R 是暫存紀錄的模組編號"""
     off = b.ds_update(f"關閉對話（{reason}）", uid, {"active": False})
     off["filter"] = flt(f"還在對話中（{reason}）", [[c(f"{{{{{R}.active}}}}", "text:equal", "true"), *seq_cond]])
     schema = ('{"type":"OBJECT","properties":{"summary":{"type":"STRING","description":"一句話摘要"},'
@@ -608,6 +608,8 @@ def assistant_close(b, R, uid, reason, seq_cond):
                   '"contents":[{"role":"user","parts":[{"text":"請依照指示中的「對話分析」，整理下面這段對話。\\n' + f"{{{{{R}.transcript}}}}" + '"}]}],'
                   '"generationConfig":{"responseMimeType":"application/json","responseSchema":' + schema + '}}',
                   onerror=[b.ignore()])
+    # 叫醒後一題都沒問成就只關掉對話，不整理分析、不寫紀錄（省點數）
+    an["filter"] = flt(f"有問過問題（{reason}）", [[c(f"{{{{{R}.turns}}}}", "number:greater", "0")]])
     AP = b.parse(f"讀出分析（{reason}）", f"{{{{{an['id']}.body.candidates[1].content.parts[1].text}}}}")
     A = AP["id"]
     pg = b.create_in(f"寫對話紀錄（{reason}）", LOG_DS, [
