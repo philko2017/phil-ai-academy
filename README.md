@@ -1,4 +1,6 @@
-# Phil 的 AI 學院：LINE 會員模組
+# Phil 的 AI 學院：會員通（LINE Member Kit）第一個客戶
+
+> 程式來自範本 [philko2017/line-member-kit](https://github.com/philko2017/line-member-kit)（私人）。改程式先改範本，再複製到這裡；這個 repo 只多了 `liff/member/app.js` 的 `CONFIG`（本客戶的 LIFF ID 與 webhook）。
 
 LINE 官方帳號「Phil 的 AI 學院」的會員申請、匯款回報與選單切換。架構沿用 [line-namecard](https://github.com/philko2017/line-namecard) 的會員模組：LINE 官方帳號＋LIFF＋Make＋Notion，只用回覆和網頁，不耗 LINE 訊息量。
 
