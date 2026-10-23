@@ -1,5 +1,5 @@
 // ===== 設定：LIFF ID 與 API 網址。正式網址（GitHub Pages）一律用真資料；本機預覽才載入 mock.js 的模擬資料 =====
-// 會員頁面送到 Make 情境「AI學院｜會員 API」，用欄位 a 分辨動作：me 我的身分（順便校正選單）｜apply 申請入會｜profile 改基本資料
+// 會員通（LINE Member Kit）的會員頁面。送到 Make 情境「{專案}｜會員 API」，用欄位 a 分辨動作：me 我的身分（順便校正選單）｜apply 申請入會｜profile 改基本資料
 // 頁面上的文字、方案、收款帳戶都不放在這裡：Make 從 Notion「前台設定」「方案」讀出來，隨 me 一起回傳
 const CONFIG = {
   liffId: "2012161136-mSmbv0VR",
@@ -238,6 +238,24 @@ function handleApiError(e) {
 function loadScript(src) {
   return new Promise((ok, fail) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = fail; document.body.append(s); });
 }
+// 標誌文字與主色來自 Notion「前台設定」：深色模式和淺底色由主色換算，換客戶不用改程式
+function mixHex(a, b, t) {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("");
+}
+function applyBrand(site) {
+  if (site["標誌文字"]) { $("#mark").textContent = site["標誌文字"]; $("#mark").hidden = false; }
+  const c = String(site["主色"] || "").trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(c)) return;
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+  const light = (r * 299 + g * 587 + b * 114) / 1000 > 150;   // 主色太亮時，按鈕字改深色
+  const root = document.documentElement.style;
+  root.setProperty("--brand", dark ? mixHex(c, "#FFFFFF", 0.45) : c);
+  root.setProperty("--on-brand", dark || light ? "#13151C" : "#FFFFFF");
+  root.setProperty("--brand-bg", dark ? mixHex(c, "#13151C", 0.75) : mixHex(c, "#FFFFFF", 0.88));
+}
 // 每個畫面都先讀 me：身分、前台設定、方案一次拿齊（順便讓後端校正選單）
 async function loadMe() {
   try {
@@ -250,6 +268,7 @@ async function loadMe() {
     S.me = r;
     for (const [k] of [...FIELDS, ...PAY_FIELDS]) S.form[k] = S.me[k] || "";
     S.form.plan = S.me.plan || "";
+    applyBrand(S.site);
     if (S.site["學院名稱"]) { $("#brand").textContent = S.site["學院名稱"]; document.title = `${S.site["簡稱"] || S.site["學院名稱"]}｜會員專區`; }
     render();
   } catch (e) {
@@ -258,6 +277,7 @@ async function loadMe() {
 }
 (async () => {
   if (IN_LIFF_HOST) {
+    if (!CONFIG.liffId || !CONFIG.apiUrl) { $("#app").innerHTML = `<div class="blocked"><h2>建置中</h2><p>會員頁面還沒接上 LINE 與 Make。</p></div>`; return; }
     try {
       await liff.init({ liffId: CONFIG.liffId });
       if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }

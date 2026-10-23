@@ -1,11 +1,12 @@
-"""產生 Phil 的 AI 學院會員模組的 Make 藍圖，輸出到 make/（改寫自 philko2017/line-namecard 的 tools/make_member_blueprint.py）：
+"""會員通（LINE Member Kit）：產生會員模組的 Make 藍圖，輸出到 make/（最早改寫自 philko2017/line-namecard 的 tools/make_member_blueprint.py）。
+情境名稱前綴、Notion 編號、LINE 編號都從 tools/config.local.json 讀，換客戶不用改這支程式。
 
-- 會員_API.blueprint.json：「AI學院｜會員 API」
+- 會員_API.blueprint.json：「{專案}｜會員 API」
     LIFF 會員頁面：a=me 我的身分＋前台設定＋方案（順便校正選單）｜a=apply 申請入會＋匯款回報｜a=profile 會員自己改基本資料
     （欄位 t 是 LINE Access Token）。頁面上的文字、方案、收款帳戶都從 Notion「前台設定」「方案」讀，repo 裡不放。
     Notion 核准連結：a=approve 核准入會｜a=sync 依身分套用選單（欄位 k 是密鑰、id 是名冊頁面 ID）
-- 會員_LINE事件.blueprint.json：「AI學院｜會員：LINE 事件」加好友就建一筆非會員；封鎖時標記
-- 會員_建立圖文選單.blueprint.json：「AI學院｜會員：建立圖文選單（手動執行）」訪客選單設為預設、會員選單設別名 member，
+- 會員_LINE事件.blueprint.json：「{專案}｜會員：LINE 事件」加好友就建一筆非會員；封鎖時標記
+- 會員_建立圖文選單.blueprint.json：「{專案}｜會員：建立圖文選單（手動執行）」訪客選單設為預設、會員選單設別名 member，
     清掉舊選單後把所有會員重新綁到新的會員選單
 
 身分與選單：非會員、審核中、已到期、停權 → 訪客選單（預設，不綁個人）；一般會員、高級會員 → 會員選單（別名 member，綁個人）。
@@ -34,7 +35,7 @@ CHANNEL = LN["login_channel_id"]
 MEMBER_LIFF = f"https://liff.line.me/{LN['liff_id']}"
 ORIGIN = CFG.get("page_origin") or "*"
 REPO = CFG.get("repo", "phil-ai-academy")
-# 情境名稱前面加專案名，例如「AI學院｜會員 API」（另外在 Make 用同名資料夾和標籤分類）
+# 情境名稱前面加專案名，例如「{專案}｜會員 API」（另外在 Make 用同名資料夾和標籤分類）
 PREFIX = f"{CFG['project']}｜" if CFG.get("project") else ""
 ALIAS = "member"
 # 選單是上下兩列、每列三欄（2500 × 1686）

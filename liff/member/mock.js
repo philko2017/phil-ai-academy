@@ -14,7 +14,7 @@
     "審核中說明": text("{姓名}，我們已收到你的申請。"), "已到期說明": text("你的會籍已在 {到期日} 到期。"), "停權說明": text("（停權說明）"),
     "到期提醒": text("會籍將於 {到期日} 到期。"), "課程預告": text("（課程預告）"), "AI 小幫手預告": text("（AI 小幫手預告）"),
     "收款銀行": text("範例銀行"), "收款帳號": text("0000-0000"), "戶名": text("範例"), "匯款提醒": text("（匯款提醒）"),
-    "範例帳戶": { type: "checkbox", checkbox: true },
+    "範例帳戶": { type: "checkbox", checkbox: true }, "標誌文字": text("範"), "主色": text("#0CA678"),
   };
   const plan = (name, label, price, months, desc, order) => ({ properties: {
     "名稱": { type: "title", title: [{ plain_text: name }] }, "標籤": text(label), "價格": { type: "number", number: price },
