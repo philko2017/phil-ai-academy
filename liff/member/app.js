@@ -56,7 +56,7 @@ const fill = (tpl, me) => esc(tpl || "").replace(/\{姓名\}/g, esc(me.name || m
 // ===== 正式後端：用表單格式送出，瀏覽器不會先送 CORS 預檢 =====
 class ApiError extends Error { constructor(code) { super(code); this.code = code; } }
 // 後端把自由文字 URL 編碼後才放進 JSON（Make 沒有 JSON 跳脫函式），這裡解碼
-const ENC_KEYS = new Set(["name", "phone", "email", "note", "line", "message", "link", "trial"]);
+const ENC_KEYS = new Set(["name", "phone", "email", "note", "line", "message", "link", "trial", "intro"]);
 const safeDecode = s => { try { return decodeURIComponent(s); } catch (e) { return s; } };
 async function post(fields) {
   const token = liff.getAccessToken();
@@ -137,7 +137,7 @@ async function need(key, call, pick) {
 // 切換畫面記進瀏覽紀錄，左上角「‹」和手機的返回鍵都能回上一頁；replace 用在沒有上一頁時的退路
 let depth = 0;
 function go(view, id = "", replace = false) {
-  S.view = view; S.id = id; S.profileEdit = false; S.editing = false;
+  S.view = view; S.id = id; S.profileEdit = false; S.editing = false; S.play = null; S.reader = null;
   const url = `?v=${view}${id ? "&id=" + id : ""}`;
   if (replace) history.replaceState({ depth }, "", url); else history.pushState({ depth: ++depth }, "", url);
   render(); scrollTo(0, 0);
@@ -172,16 +172,31 @@ function renderItem(view) {
   const it = list.find(x => x.id.replace(/-/g, "") === S.id.replace(/-/g, ""));
   if (!it) { $("#app").innerHTML = `<div class="blocked"><h2>找不到這個內容</h2></div><div class="links">${back}</div>`; return; }
   const aud = it["開放對象"], ok = canSee(aud), st = S.me.state;
+  const playing = S.play && S.play.id === S.id;
+  const reading = S.reader && S.reader.id === S.id;
   // 公告只顯示內容，不放按鈕；其他類型依身分給「開始觀看／下載」或解鎖方式
-  const cta = it["類型"] === "公告" && ok ? ""
+  const cta = playing ? ""
+    : reading ? `<button class="primary" id="goLink">前往觀看</button>`
+    : it["類型"] === "公告" && ok ? ""
     : ok ? `<button class="primary" id="openItem">${it["類型"] === "數位產品" ? "下載" : "開始觀看"}</button>`
     : aud === "單獨購買" ? `<button class="primary" disabled>購買 ${money(it["價格"])}（即將推出）</button>`
     : IS_MEMBER(st) ? `<p class="notice">這是高級會員專屬內容，升級請洽管理者。</p>`
     : `<a class="primary btn" href="?v=home" data-nav="home">申請加入，解鎖內容</a>`;
-  $("#app").innerHTML = `<div class="detail">${thumb(it, "full")}
+  $("#app").innerHTML = `<div class="detail">${playing ? player(S.play.url) : thumb(it, "full")}
     <p class="meta">${esc([it["類型"], aud, it["上架日期"]].filter(Boolean).join(" · "))}</p><h1>${esc(it["標題"])}</h1><p class="lead">${esc(it["公開摘要"])}</p>
+    ${reading ? `<div class="card intro"><h2>導讀</h2><p class="body">${esc(S.reader.intro)}</p></div>` : ""}
     <div class="cta">${cta}${!ok && it["試看連結"] ? `<a class="ghost" href="${esc(it["試看連結"])}" target="_blank" rel="noopener">先試看 →</a>` : ""}</div></div>
     <div class="links">${back}</div>`;
+}
+// 播放器：不給下載、子母畫面、倍速選單，右鍵關掉；畫面上浮動顯示會員名字（浮水印，降低錄影外流的意願）
+function player(url) {
+  const who = [S.me.name || S.me.line, S.me.phone ? "…" + String(S.me.phone).replace(/\D/g, "").slice(-3) : ""].filter(Boolean).join(" ");
+  return `<div class="player"><video src="${esc(url)}" controls playsinline autoplay preload="metadata"
+    controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture oncontextmenu="return false"></video>
+    <span class="wm">${esc(who)}</span></div>`;
+}
+function openLink(url) {
+  if (window.liff && liff.isInClient && liff.isInClient()) liff.openWindow({ url, external: false }); else location.href = url;
 }
 async function openItem() {
   if (S.busy) return;
@@ -189,7 +204,11 @@ async function openItem() {
   try {
     const r = await api.open(S.id);
     if (!r.link) throw new ApiError("no_link");
-    if (window.liff && liff.isInClient && liff.isInClient()) liff.openWindow({ url: r.link, external: false }); else location.href = r.link;
+    // Notion 上傳的影片：在這頁直接播放（網址約一小時失效）；其他連結（YouTube 等）另開
+    if (r.video === "Y") { S.play = { id: S.id, url: r.link }; S.busy = false; render(); return; }
+    // 有導讀（例如 YouTube 影片）：先在這頁看導讀，再按「前往觀看」
+    if (r.intro) { S.reader = { id: S.id, url: r.link, intro: r.intro }; S.busy = false; render(); return; }
+    openLink(r.link);
   } catch (e) {
     if (!handleApiError(e)) toast(e.code === "locked" ? "這個內容需要更高的身分才能看" : e.code === "no_link" ? "這個內容還沒放連結" : "開啟失敗，請再試一次");
   }
@@ -341,7 +360,7 @@ function goBack() {
 addEventListener("popstate", e => {
   const p = new URLSearchParams(location.search), v = p.get("v");
   depth = (e.state && e.state.depth) || 0;
-  S.view = VIEWS.includes(v) ? v : "home"; S.id = p.get("id") || ""; S.profileEdit = false; S.editing = false;
+  S.view = VIEWS.includes(v) ? v : "home"; S.id = p.get("id") || ""; S.profileEdit = false; S.editing = false; S.play = null; S.reader = null;
   render(); scrollTo(0, 0);
 });
 document.addEventListener("click", async e => {
@@ -355,6 +374,7 @@ document.addEventListener("click", async e => {
   const t = e.target.closest("button"); if (!t) return;
   if (t.id === "back") { goBack(); return; }
   if (t.id === "openItem") { openItem(); return; }
+  if (t.id === "goLink" && S.reader) { openLink(S.reader.url); return; }
   if (t.id === "edit") { S.editing = true; render(); return; }
   if (t.id === "cancelEdit") { S.editing = false; render(); return; }
   if (t.id === "profileEdit") { S.profileEdit = true; render(); scrollTo(0, 0); return; }

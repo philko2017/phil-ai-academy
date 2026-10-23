@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.line-scdn.net https://liffsdk.line-scdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://hook.us2.make.com https://api.line.me https://*.line.me https://*.line-scdn.net https://uts-front.line-apps.com; frame-src https://*.line.me; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.line-scdn.net https://liffsdk.line-scdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://hook.us2.make.com https://api.line.me https://*.line.me https://*.line-scdn.net https://uts-front.line-apps.com; frame-src https://*.line.me; media-src https: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="robots" content="noindex, nofollow">
 <title>會員專區</title>
@@ -77,6 +77,11 @@ dt{color:var(--soft)}
 .dots i:nth-child(3){animation-delay:.4s}
 @keyframes dot{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-5px);opacity:1}}
 @media (prefers-reduced-motion:reduce){.dots i{animation:none;opacity:.7}}
+/* 影片播放器與會員名字浮水印（慢慢在畫面上移動） */
+.player{position:relative;margin-top:16px;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9}
+.player video{display:block;width:100%;height:100%}
+.wm{position:absolute;left:8%;top:12%;color:rgba(255,255,255,.45);font-size:14px;font-weight:700;text-shadow:0 0 3px rgba(0,0,0,.6);pointer-events:none;user-select:none;animation:wm 24s linear infinite}
+@keyframes wm{0%{left:8%;top:12%}25%{left:62%;top:20%}50%{left:55%;top:72%}75%{left:10%;top:64%}100%{left:8%;top:12%}}
 .notice{margin-top:14px;border-radius:12px;background:var(--amber-bg);color:var(--amber);padding:10px 14px;font-size:15px}
 /* 圖片一律 16:9，裁切置中 */
 .cover{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:14px;background:var(--brand-bg);margin-top:16px}

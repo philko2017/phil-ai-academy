@@ -3,7 +3,7 @@
 
 - 會員_API.blueprint.json：「{專案}｜會員 API（自動執行）」（欄位 t 是 LINE Access Token）
     a=me 我的身分＋前台設定＋方案＋是否管理者（順便校正選單）｜a=apply 申請入會＋匯款回報｜a=profile 會員自己改基本資料
-    a=news 內容庫標籤「最新消息」｜a=courses 內容庫標籤「課程」（列表都不含內容連結，上鎖的也列出來）｜a=course_open 依身分給內容連結
+    a=news 內容庫標籤「最新消息」｜a=courses 內容庫標籤「課程」（列表都不含內容連結，上鎖的也列出來）｜a=course_open 依身分給內容連結（有影片檔就給 Notion 一小時有效的檔案網址）
     a=admin_list 名冊｜a=admin_set 核准、升級高級會員、停權、恢復（只有名冊「角色」勾管理者的人能用）
     頁面上的文字、圖片、方案、收款帳戶都從 Notion「前台設定」「方案」讀，repo 裡不放。
     Notion 核准連結：a=approve 核准入會｜a=sync 依身分套用選單（欄位 k 是密鑰、id 是名冊頁面 ID）
@@ -487,11 +487,17 @@ def build_api():
     allow = ("{{if(" + parent[2:-2] + f' = "{CONTENT_DS}"; if(' + status[2:-2] + ' = "上架"; if(' + w_admin[2:-2] + ' = "Y"; "Y"; if('
              + aud[2:-2] + ' = "公開"; "Y"; if(' + aud[2:-2] + ' = "一般會員"; if(' + wi + ' = "一般會員"; "Y"; if(' + wi
              + ' = "高級會員"; "Y"; "N")); if(' + aud[2:-2] + ' = "高級會員"; if(' + wi + ' = "高級會員"; "Y"; "N"); "N")))); "N"); "N")}}')
-    link, trial = f"{{{{{I}.body.properties.`內容連結`.url}}}}", f"{{{{{I}.body.properties.`試看連結`.url}}}}"
+    # 有上傳「影片檔」就給 Notion 的檔案網址（約一小時後失效，轉貼出去很快就看不到），頁面直接嵌入播放；沒有才給「內容連結」
+    vid = f"{I}.body.properties.`影片檔`.files[1].file.url"
+    link = "{{ifempty(" + vid + "; " + f"{I}.body.properties.`內容連結`.url" + ")}}"
+    video = "{{if(" + vid + '; "Y"; "N")}}'
+    trial = f"{{{{{I}.body.properties.`試看連結`.url}}}}"
+    # 導讀：Phil 為 YouTube 等外部影片寫的三五百字說明，跟連結一樣有權限才給
+    intro = "{{join(map(" + f"{I}.body.properties.`導讀`.rich_text" + '; "plain_text"); "")}}'
     open_flow = [b.router("檢查內容編號", [
         (flt("內容編號格式正確", [[c("{{1.id}}", "text:pattern", "^[0-9a-fA-F-]{32,36}$")]]), [item, b.router("可不可以看", [
             (flt("可以看", [[c(allow, "text:equal", "Y")]]), [
-                respond_json("回傳內容連結", '{"ok":true,"link":"' + enc(link) + '","trial":"' + enc(trial) + '"}')]),
+                respond_json("回傳內容連結", '{"ok":true,"link":"' + enc(link) + '","video":"' + video + '","intro":"' + enc(intro) + '","trial":"' + enc(trial) + '"}')]),
             (flt("不能看", [[c(allow, "text:notequal", "Y")]]), [
                 respond_json("回傳上鎖", '{"ok":false,"error":"locked","trial":"' + enc(trial) + '"}', "403")]),
         ])]),

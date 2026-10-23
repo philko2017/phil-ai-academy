@@ -60,7 +60,9 @@
     async profile(f) { await wait(500); me = { ...me, ...f }; return { ok: true }; },
     async news() { await wait(400); return { news: tagged("最新消息") }; },
     async courses() { await wait(400); return { items: tagged("課程") }; },
-    async open() { await wait(400); return { link: "https://example.com/" }; },
+    // c2 模擬 Notion 上傳的影片（頁面內播放），其他模擬外部連結
+    async open(id) { await wait(400); return id === "c2" ? { link: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", video: "Y" }
+      : id === "c1" ? { link: "https://www.youtube.com/", intro: "（範例導讀）這支影片值得看的三個重點：\n一、……\n二、……\n三、……" } : { link: "https://example.com/" }; },
     async adminList() { await wait(500); if (!admin) throw Object.assign(new Error("not_admin"), { code: "not_admin" }); return { members }; },
     async adminSet() { await wait(500); return { ok: true }; },
   };
