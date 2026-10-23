@@ -746,7 +746,7 @@ def build_events():
             b.update("改回好友中", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "好友中")]),
             apply_menu(b, uid, f"{{{{{W}.id}}}}", want_menu(admin_of(W), sp(W, "身分", ".name")), "重新加好友")]),
         (flt("封鎖", [[c(typ, "text:equal", "unfollow"), exist]]), [
-            b.update("標記已封鎖", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "已封鎖")])]),
+            b.update("標記已封鎖", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "已封鎖"), fv("目前選單", "select", "訪客")])]),
     ])]
     flow = [
         {"id": 1, "module": "line:watchMessages", "version": 1, "mapper": {},
