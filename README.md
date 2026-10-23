@@ -16,7 +16,7 @@ LINE 官方帳號「Phil 的 AI 學院」的會員申請、匯款回報與選單
 |---|---|---|
 | 會員頁面（LIFF） | `liff/member/` | 依身分顯示：申請表（方案、匯款、基本資料）／審核中／會員資料／停權。`?v=about` 學院介紹，`?v=courses`、`?v=ai` 目前是「即將推出」 |
 | 前台內容 | Notion「前台設定」（一列）、「方案」 | 學院名稱、介紹、歡迎語、各身分的說明、收款帳戶、方案與價格都在 Notion。Make 每次讀出來交給頁面，**repo 裡不放任何業務資料** |
-| Make 情境 | `tools/make_blueprints.py` 產生三份藍圖 | 「AI學院｜會員 API」「AI學院｜會員：LINE 事件」「AI學院｜會員：建立圖文選單（手動執行）」 |
+| Make 情境 | `tools/make_blueprints.py` 產生四份藍圖 | 「AI學院｜會員 API（自動執行）」「AI學院｜會員：LINE 事件（自動執行）」「AI學院｜會員：建立圖文選單（手動執行）」「AI學院｜圖片：上傳到雲端硬碟（手動執行）」 |
 | Notion | Phil 工作區「Phil AI 學院」底下的「會員名冊」 | 欄位名稱要和 `make_blueprints.py` 一字不差 |
 
 ## 身分與方案
