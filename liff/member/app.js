@@ -127,9 +127,12 @@ async function need(key, call, pick) {
   try { S[key] = nrows(pick(await call())); return true; }
   catch (e) { if (!handleApiError(e)) $("#app").innerHTML = `<div class="blocked"><h2>暫時無法讀取</h2><p>請稍後再開一次。</p></div>`; return false; }
 }
-function go(view, id = "") {
-  S.view = view; S.id = id; S.profileEdit = false;
-  history.replaceState(null, "", `?v=${view}${id ? "&id=" + id : ""}`);
+// 切換畫面記進瀏覽紀錄，左上角「‹」和手機的返回鍵都能回上一頁；replace 用在沒有上一頁時的退路
+let depth = 0;
+function go(view, id = "", replace = false) {
+  S.view = view; S.id = id; S.profileEdit = false; S.editing = false;
+  const url = `?v=${view}${id ? "&id=" + id : ""}`;
+  if (replace) history.replaceState({ depth }, "", url); else history.pushState({ depth: ++depth }, "", url);
   render(); scrollTo(0, 0);
 }
 
@@ -319,6 +322,21 @@ function checkBasic(f) {
 // ===== 操作 =====
 document.addEventListener("input", e => { if (e.target.dataset.k) S.form[e.target.dataset.k] = e.target.value; });
 document.addEventListener("change", e => { if (e.target.name === "plan") { S.form.plan = e.target.value; render(); } });
+// 左上角「‹」：先離開編輯狀態；有上一頁就回上一頁；直接從選單打開的話，內容頁回列表、其他回會員專區，會員專區再按就關閉
+function goBack() {
+  if (S.profileEdit) { S.profileEdit = false; for (const [k] of FIELDS) S.form[k] = S.me[k] || ""; render(); return; }
+  if (S.editing) { S.editing = false; render(); return; }
+  if (depth > 0) { history.back(); return; }
+  if (S.id) return go(S.view, "", true);
+  if (S.view !== "home") return go("home", "", true);
+  if (window.liff && liff.isInClient && liff.isInClient()) liff.closeWindow(); else history.back();
+}
+addEventListener("popstate", e => {
+  const p = new URLSearchParams(location.search), v = p.get("v");
+  depth = (e.state && e.state.depth) || 0;
+  S.view = VIEWS.includes(v) ? v : "home"; S.id = p.get("id") || ""; S.profileEdit = false; S.editing = false;
+  render(); scrollTo(0, 0);
+});
 document.addEventListener("click", async e => {
   // 頁面內切換畫面：不重新整理，省下重新讀身分的 Make 點數
   const nav = e.target.closest("[data-nav]");
@@ -328,6 +346,7 @@ document.addEventListener("click", async e => {
   const row = e.target.closest("[data-sel]");
   if (row && !e.target.closest("button, input")) { S.sel = S.sel === row.dataset.sel ? "" : row.dataset.sel; $("#rows").innerHTML = adminRows(); return; }
   const t = e.target.closest("button"); if (!t) return;
+  if (t.id === "back") { goBack(); return; }
   if (t.id === "openItem") { openItem(); return; }
   if (t.id === "edit") { S.editing = true; render(); return; }
   if (t.id === "cancelEdit") { S.editing = false; render(); return; }
