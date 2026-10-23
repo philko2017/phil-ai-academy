@@ -724,7 +724,7 @@ def assistant_flow(b, uid, text, token):
 
 
 def build_events():
-    """LINE 事件：加好友（follow）就在名冊建一筆非會員；封鎖（unfollow）時標記；
+    """LINE 事件：加好友（follow）就在名冊建一筆非會員，重新加好友時依身分重新套用選單；封鎖（unfollow）時標記；
     文字訊息交給 AI 小幫手（按選單「AI 小幫手」送出關鍵字叫醒）。只處理每次送來的第一個事件。"""
     b = B()
     ev = "{{1.events[1]"
@@ -741,8 +741,10 @@ def build_events():
                                  fv("身分", "select", "非會員"), fv("好友狀態", "select", "好友中"),
                                  fv("LINE 顯示名稱", "rich_text", f"{{{{{prof['id']}.body.displayName}}}}"),
                                  fv("LINE User ID", "rich_text", uid), fv("目前選單", "select", "訪客"), now("加入好友時間")])]),
+        # 封鎖時 LINE 會拿掉個人選單，解除封鎖後只剩訪客選單，所以依名冊的身分重新套用
         (flt("重新加好友", [[c(typ, "text:equal", "follow"), exist]]), [
-            b.update("改回好友中", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "好友中")])]),
+            b.update("改回好友中", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "好友中")]),
+            apply_menu(b, uid, f"{{{{{W}.id}}}}", want_menu(admin_of(W), sp(W, "身分", ".name")), "重新加好友")]),
         (flt("封鎖", [[c(typ, "text:equal", "unfollow"), exist]]), [
             b.update("標記已封鎖", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "已封鎖")])]),
     ])]
