@@ -256,7 +256,7 @@ class B:
 
     def ds_get(self, name, key):
         return {"id": self.nid(), "module": "datastore:GetRecord", "version": 1, "parameters": {"datastore": ASSIST_DS},
-                "mapper": {"key": key, "returnWrappedOutput": False}, "metadata": self.meta(name)}
+                "mapper": {"key": key, "returnWrapped": False}, "metadata": self.meta(name)}
 
     def ds_put(self, name, key, data):
         return {"id": self.nid(), "module": "datastore:AddRecord", "version": 1, "parameters": {"datastore": ASSIST_DS},
