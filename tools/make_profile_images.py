@@ -1,4 +1,4 @@
-"""會員通（LINE Member Kit）：產生官方帳號「商業簡介頁」用的圖（1280 × 720，16:9），輸出到 assets/profile/。
+"""會員通（LINE Member Kit）：產生官方帳號「商業簡介頁」用的圖（1280 × 640，2:1；LINE 這兩個欄位固定裁成 2:1），輸出到 assets/profile/。
 
 - intro.jpg：「學院介紹」區塊（自由填寫）的照片
 - notice.jpg：「最新資訊」公告的圖片
@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw
 
 from make_richmenus import BRAND, FONT, FONT_REG, ROOT, font, hex_rgb, mix
 
-W, H = 1280, 720
+W, H = 1280, 640
 TEXT = {
     "name": "Phil 的 AI 學院",
     "tagline": "把 AI 用進工作與生活",
@@ -42,15 +42,15 @@ def mark(d, primary, x, y, r=70):
 def intro():
     img, d, primary = base()
     white, soft = (255, 255, 255), mix(primary, (255, 255, 255), 0.75)
-    mark(d, primary, 96, 70)
-    d.text((96, 330), TEXT["name"], font=font(FONT, 92), fill=white, anchor="ls")
-    d.text((96, 410), TEXT["tagline"], font=font(FONT_REG, 46), fill=soft, anchor="ls")
+    mark(d, primary, 96, 60, r=60)
+    d.text((96, 300), TEXT["name"], font=font(FONT, 92), fill=white, anchor="ls")
+    d.text((96, 375), TEXT["tagline"], font=font(FONT_REG, 46), fill=soft, anchor="ls")
     x = 96
     for p in TEXT["pillars"]:
         f = font(FONT, 38)
         w = d.textlength(p, font=f) + 64
-        d.rounded_rectangle([x, 500, x + w, 576], radius=38, fill=white)
-        d.text((x + w / 2, 538), p, font=f, fill=primary, anchor="mm")
+        d.rounded_rectangle([x, 450, x + w, 526], radius=38, fill=white)
+        d.text((x + w / 2, 488), p, font=f, fill=primary, anchor="mm")
         x += w + 24
     return img
 
@@ -58,17 +58,17 @@ def intro():
 def notice():
     img, d, primary = base()
     white, soft = (255, 255, 255), mix(primary, (255, 255, 255), 0.75)
-    mark(d, primary, 96, 80, r=50)
-    d.text((220, 130), TEXT["name"], font=font(FONT_REG, 40), fill=soft, anchor="lm")
-    d.text((96, 290), TEXT["welcome"], font=font(FONT, 110), fill=white, anchor="ls")
-    cw, gap, top = 340, 28, 370
+    mark(d, primary, 96, 56, r=44)
+    d.text((208, 100), TEXT["name"], font=font(FONT_REG, 38), fill=soft, anchor="lm")
+    d.text((96, 250), TEXT["welcome"], font=font(FONT, 100), fill=white, anchor="ls")
+    cw, gap, top = 340, 28, 310
     for i, (title, sub) in enumerate(TEXT["steps"]):
         x = 96 + i * (cw + gap)
-        d.rounded_rectangle([x, top, x + cw, top + 250], radius=28, fill=white)
+        d.rounded_rectangle([x, top, x + cw, top + 240], radius=28, fill=white)
         d.ellipse([x + 32, top + 32, x + 96, top + 96], fill=primary)
         d.text((x + 64, top + 64), str(i + 1), font=font(FONT, 38), fill=white, anchor="mm")
-        d.text((x + 32, top + 160), title, font=font(FONT, 46), fill=primary, anchor="ls")
-        d.text((x + 32, top + 212), sub, font=font(FONT_REG, 26), fill=mix(primary, (60, 64, 80), 0.6), anchor="ls")
+        d.text((x + 32, top + 155), title, font=font(FONT, 46), fill=primary, anchor="ls")
+        d.text((x + 32, top + 205), sub, font=font(FONT_REG, 26), fill=mix(primary, (60, 64, 80), 0.6), anchor="ls")
     return img
 
 
