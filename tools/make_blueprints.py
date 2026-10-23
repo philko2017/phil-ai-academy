@@ -34,6 +34,12 @@ MK, LN = CFG["make"], CFG["line"]
 CONN_NOTION, CONN_LINE = MK["notion_connection_id"], MK["line_connection_id"]
 CONN_DRIVE = MK.get("gdrive_connection_id")
 DRIVE_FOLDER = CFG.get("drive", {}).get("folder_id", "")   # 圖床：Google 雲端硬碟「會員通圖床／專案名稱」
+# AI 小幫手：Gemini 連線、對話暫存（Make Data Store）、模型與關鍵字
+CONN_GEMINI = MK.get("gemini_connection_id")
+ASSIST_DS = MK.get("assistant_datastore_id")
+AS = CFG.get("assistant", {})
+GEMINI_MODEL = AS.get("model", "gemini-flash-latest")
+KEYWORD, END_WORD = AS.get("keyword", "AI小幫手"), AS.get("end_word", "結束")
 DS = CFG["notion"]["data_source_id"]
 # 前台設定（一列）與方案：會員頁面上的文字、收款帳戶、價格都從這兩張 Notion 表讀，repo 裡不放
 SETTINGS_PAGE = CFG["notion"]["settings_page_id"]
@@ -41,6 +47,9 @@ PLANS_DS = CFG["notion"]["plans_data_source_id"]
 CONTENT_DS = CFG["notion"]["content_data_source_id"]    # 內容庫（最新消息、課程、數位產品都在這裡，用「標籤」分）
 # 內容庫列表回傳的欄位（Notion 欄位 ID）：除了「內容連結」都要，連結只在點開時依身分給
 CONTENT_LIST_PROPS = CFG["notion"]["content_list_property_ids"]
+RULES_DS = CFG["notion"].get("assistant_rules_data_source_id")   # 🤖 小幫手指示
+FAQ_DS = CFG["notion"].get("faq_data_source_id")                 # 📖 FAQ 知識庫
+LOG_DS = CFG["notion"].get("assistant_log_data_source_id")       # 💬 小幫手對話紀錄
 # 欄位清單直接寫進網址：Make 的 qs 遇到同名參數只留最後一個（2026-10-23 列表只剩「標籤」一個欄位）
 LIST_QS = "&".join("filter_properties=" + quote(pid, safe="") for pid in CONTENT_LIST_PROPS)
 NOTION_VERSION = "2025-09-03"   # 查詢 data source（/v1/data_sources/…/query）要這個版本
@@ -217,6 +226,52 @@ class B:
         if onerror:
             d["onerror"] = onerror
         return d
+
+    def line_raw(self, name, url, body, onerror=None):
+        """body 已經是 JSON 文字（自由文字先用 to_json 跳脫過）"""
+        d = {"id": self.nid(), "module": "line:makeApiCall", "version": 1, "parameters": {"__IMTCONN__": CONN_LINE},
+             "mapper": {"url": url, "method": "POST", "headers": [{"key": "Content-Type", "value": "application/json"}], "body": body},
+             "metadata": self.meta(name, LINE_META)}
+        if onerror:
+            d["onerror"] = onerror
+        return d
+
+    def reply(self, name, token, text_json):
+        """回覆一則文字訊息（不耗 LINE 訊息額度）；text_json 是含引號的 JSON 字串"""
+        return self.line_raw(name, "/v2/bot/message/reply",
+                             '{"replyToken":"' + token + '","messages":[{"type":"text","text":' + text_json + '}]}', onerror=[self.ignore()])
+
+    def gemini(self, name, body, onerror=None):
+        d = {"id": self.nid(), "module": "gemini-ai:makeApiCall", "version": 1, "parameters": {"__IMTCONN__": CONN_GEMINI},
+             "mapper": {"url": f"/v1beta/models/{GEMINI_MODEL}:generateContent", "method": "POST",
+                        "headers": [{"key": "Content-Type", "value": "application/json"}], "qs": [], "body": body},
+             "metadata": self.meta(name, [{"name": "__IMTCONN__", "type": "account:gemini-ai-q9zyjp", "label": "Connection", "required": True}])}
+        if onerror:
+            d["onerror"] = onerror
+        return d
+
+    def parse(self, name, text):
+        return {"id": self.nid(), "module": "json:ParseJSON", "version": 1, "parameters": {"type": ""},
+                "mapper": {"json": text}, "metadata": self.meta(name)}
+
+    def ds_get(self, name, key):
+        return {"id": self.nid(), "module": "datastore:GetRecord", "version": 1, "parameters": {"datastore": ASSIST_DS},
+                "mapper": {"key": key, "returnWrappedOutput": False}, "metadata": self.meta(name)}
+
+    def ds_put(self, name, key, data):
+        return {"id": self.nid(), "module": "datastore:AddRecord", "version": 1, "parameters": {"datastore": ASSIST_DS},
+                "mapper": {"key": key, "data": data, "overwrite": True}, "metadata": self.meta(name)}
+
+    def ds_update(self, name, key, data):
+        return {"id": self.nid(), "module": "datastore:UpdateRecord", "version": 1, "parameters": {"datastore": ASSIST_DS},
+                "mapper": {"key": key, "data": data, "insert": False}, "metadata": self.meta(name)}
+
+    def sleep(self, name, seconds):
+        return {"id": self.nid(), "module": "util:FunctionSleep", "version": 1, "parameters": {},
+                "mapper": {"duration": seconds}, "metadata": self.meta(name)}
+
+    def create_in(self, name, ds, fields):
+        return self.notion("createDataSourceItem", name, {"fields": fields, "select": "map", "data_source": ds})
 
     def router(self, name, routes):
         mid = self.nid()
@@ -511,35 +566,186 @@ def build_api():
     return blueprint(PREFIX + "會員 API（自動執行）", flow)
 
 
+# ==== AI 小幫手（LINE 聊天室）：按選單送出關鍵字叫醒，之後打字就由 Gemini 依 Notion 指示和 FAQ 回答 ====
+# 對話進行中的狀態放 Make Data Store（每位會員一筆，key 是 LINE User ID）；每則訊息回覆後等閒置秒數，
+# 期間沒有新訊息（seq 沒變）就結束，請 Gemini 整理對話分析，寫一筆「💬 小幫手對話紀錄」。
+# 自由文字一律先經 json:TransformToJSON 跳脫，存進暫存的 transcript／blocks 是已跳脫、可直接放進 JSON 的文字。
+TODAY = '{{formatDate(now; "YYYY-MM-DD"; "Asia/Taipei")}}'
+
+
+def inner(mid):
+    """to_json 輸出的 JSON 字串去掉前後引號，可以直接嵌進另一段 JSON 字串裡"""
+    return "{{substring(" + f"{mid}.json; 1; length({mid}.json) - 1" + ")}}"
+
+
+def para(prefix, text):
+    """Notion 段落區塊（text 已跳脫）"""
+    return ('{"object":"block","type":"paragraph","paragraph":{"rich_text":[{"type":"text","text":{"content":"'
+            + prefix + text + '"}}]}}')
+
+
+def qs_props(ids):
+    return "?" + "&".join("filter_properties=" + quote(i, safe="") for i in ids)
+
+
+def assistant_close(b, R, uid, reason, seq_cond):
+    """結束一場對話：先關掉暫存，再請 Gemini 整理分析，寫進對話紀錄（含全文）。R 是暫存紀錄的模組編號"""
+    off = b.ds_update(f"關閉對話（{reason}）", uid, {"active": False})
+    off["filter"] = flt(f"還在對話中（{reason}）", [[c(f"{{{{{R}.active}}}}", "text:equal", "true"), *seq_cond]])
+    schema = ('{"type":"OBJECT","properties":{"summary":{"type":"STRING","description":"一句話摘要"},'
+              '"need":{"type":"STRING","description":"會員想解決的問題"},'
+              '"level":{"type":"STRING","enum":["高","中","低","無"],"description":"商機程度"},'
+              '"next":{"type":"STRING","description":"建議 Phil 下一步怎麼跟進"}},"required":["summary","need","level","next"]}')
+    an = b.gemini(f"整理對話分析（{reason}）",
+                  '{"system_instruction":{"parts":[{"text":' + f"{{{{{R}.system}}}}" + '}]},'
+                  '"contents":[{"role":"user","parts":[{"text":"請依照指示中的「對話分析」，整理下面這段對話。\\n' + f"{{{{{R}.transcript}}}}" + '"}]}],'
+                  '"generationConfig":{"responseMimeType":"application/json","responseSchema":' + schema + '}}',
+                  onerror=[b.ignore()])
+    AP = b.parse(f"讀出分析（{reason}）", f"{{{{{an['id']}.body.candidates[1].content.parts[1].text}}}}")
+    A = AP["id"]
+    pg = b.create_in(f"寫對話紀錄（{reason}）", LOG_DS, [
+        fv("標題", "title", f"{{{{{R}.name}}}}｜" + "{{formatDate(" + f"{R}.started" + '; "YYYY-MM-DD HH:mm"; "Asia/Taipei")}}'),
+        fv("LINE User ID", "rich_text", uid), date("開始時間", f"{{{{{R}.started}}}}", True), now("結束時間"),
+        fv("回合數", "number", f"{{{{{R}.turns}}}}"), fv("摘要", "rich_text", f"{{{{{A}.summary}}}}"),
+        fv("需求", "rich_text", f"{{{{{A}.need}}}}"), fv("商機程度", "select", f"{{{{{A}.level}}}}"),
+        fv("建議下一步", "rich_text", f"{{{{{A}.next}}}}"), fv("有找不到答案的問題", "checkbox", f"{{{{{R}.unanswered}}}}"),
+        fv("結束方式", "select", reason), fv("跟進狀態", "select", "未處理")])
+    P = pg["id"]
+    rel = b.notion_api(f"連到會員（{reason}）", f"/v1/pages/{{{{{P}.id}}}}", "PATCH",
+                       '{"properties":{"會員":{"relation":[{"id":"' + f"{{{{{R}.page}}}}" + '"}]}}}', onerror=[b.ignore()])
+    body = b.notion_api(f"放入對話全文（{reason}）", f"/v1/blocks/{{{{{P}.id}}}}/children", "PATCH",
+                        '{"children":[' + "{{substring(" + f"{R}.blocks" + "; 1)}}" + ']}', onerror=[b.ignore()])
+    body["filter"] = flt(f"有對話內容（{reason}）", [[c(f"{{{{{R}.blocks}}}}", "exist")]])
+    return [off, an, AP, pg, rel, body]
+
+
+def assistant_flow(b, uid, text, token):
+    S = b.ds_get("讀對話暫存", uid)
+    I = S["id"]
+    active = c(f"{{{{{I}.active}}}}", "text:equal", "true")
+    inactive = c(f"{{{{{I}.active}}}}", "text:notequal", "true")
+    day_turns = "if(" + f"{I}.day = " + TODAY[2:-2] + f"; {I}.day_turns; 0)"
+
+    # --- 叫醒：只限會員（或管理者），讀指示與 FAQ 存進暫存，回開場白 ---
+    m = b.find_member("找名冊（小幫手）", uid)
+    M = m["id"]
+    ident, adm = sp(M, "身分", ".name"), admin_of(M)
+    mexist, mnone = c(f"{{{{{M}.id}}}}", "exist"), c(f"{{{{{M}.id}}}}", "notexist")
+    ok = lambda *x: is_member(ident, mexist, *x) + [[mexist, c(adm, "text:equal", "Y"), *x]]
+    no = [[mnone], [mexist, *not_member(ident), c(adm, "text:notequal", "Y")]]
+    j = lambda v: '"' + v + '"'
+    st = b.notion_api("讀前台設定（小幫手）", f"/v1/pages/{SETTINGS_PAGE}")
+    rules = b.notion_api("讀小幫手指示", f"/v1/data_sources/{RULES_DS}/query", "POST",
+                         '{"filter":{"property":"啟用","checkbox":{"equals":true}},"sorts":[{"property":"排序","direction":"ascending"}],"page_size":100}')
+    faq = b.notion_api("讀 FAQ", f"/v1/data_sources/{FAQ_DS}/query", "POST",
+                       '{"filter":{"property":"上架","checkbox":{"equals":true}},"page_size":100}')
+    greet = b.notion_api("讀開場白與結束語", f"/v1/data_sources/{RULES_DS}/query", "POST",
+                         '{"filter":{"and":[{"property":"啟用","checkbox":{"equals":true}},{"or":['
+                         '{"property":"類型","select":{"equals":"開場白"}},{"property":"類型","select":{"equals":"結束語"}}]}]},'
+                         '"sorts":[{"property":"排序","direction":"ascending"}]}')
+    pick = lambda n: "join(map(" + f"{greet['id']}.body.results[{n}].properties.`內容`.rich_text" + '; "plain_text"); "")'
+    rj = b.to_json("指示轉 JSON", "{{map(" + f"{rules['id']}.body.results" + '; "properties")}}')
+    fj = b.to_json("FAQ 轉 JSON", "{{map(" + f"{faq['id']}.body.results" + '; "properties")}}')
+    sysj = b.to_json("組成系統指示", "下面是 Notion 裡的設定（JSON），請照做。\n【小幫手指示】\n"
+                     + f"{{{{{rj['id']}.json}}}}" + "\n【FAQ 知識庫】\n" + f"{{{{{fj['id']}.json}}}}"
+                     + "\n回答一律用繁體中文。只回答與 FAQ 相關的內容，FAQ 沒有就依「找不到答案時」回覆，並把 found 設為 false。")
+    sysj["mapper"]["object"] = sysj["mapper"]["object"].replace("\\n", "{{newline}}")
+    hello = b.to_json("開場白", "{{replace(" + pick(1) + '; "{姓名}"; ' + sp(M, "姓名", "[1].plain_text")[2:-2] + ")}}")
+    bye = b.to_json("結束語", "{{" + pick(2) + "}}")
+    idle = "{{min(300; max(60; ifempty(" + f"{st['id']}.body.properties.`小幫手閒置分鐘`.number; 5) * 60))" + "}}"
+    newseq = "{{ifempty(" + f"{I}.seq; 0) + 1" + "}}"
+    put = b.ds_put("開始對話", uid, {
+        "active": True, "seq": newseq, "turns": 0, "day": TODAY, "day_turns": "{{" + day_turns + "}}",
+        "started": "{{now}}", "last": "{{now}}", "name": sp(M, "姓名", "[1].plain_text"), "page": f"{{{{{M}.id}}}}",
+        "system": f"{{{{{sysj['id']}.json}}}}", "transcript": "", "unanswered": False, "bye": f"{{{{{bye['id']}.json}}}}",
+        "limit": "{{ifempty(" + f"{st['id']}.body.properties.`小幫手每日回合上限`.number; 30)" + "}}", "idle": idle, "blocks": ""})
+    G1 = b.ds_get("五分鐘後讀暫存（開場）", uid)
+    start = [st, rules, faq, greet, rj, fj, sysj, hello, bye, put, b.reply("回開場白", token, f"{{{{{hello['id']}.json}}}}"),
+             b.sleep("等閒置時間（開場）", idle), G1,
+             *assistant_close(b, G1["id"], uid, "逾時", [c(f"{{{{{G1['id']}.seq}}}}", "text:equal", newseq)])]
+    wake = [m, b.router("叫醒小幫手", [
+        (flt("不是會員", no), [b.reply("回非會員", token, j("AI 小幫手目前只開放給會員使用。加入會員：" + MEMBER_LIFF + "?v=home"))]),
+        (flt("已在對話中", ok(active)), [b.reply("回已在對話中", token, j("我在這裡，直接輸入你的問題就可以了。"))]),
+        (flt("開始對話", ok(inactive)), start),
+    ])]
+
+    # --- 回答：檢查每日上限，Gemini 依指示和 FAQ 回答，記進暫存，等閒置時間後沒新訊息就結束 ---
+    over = c("{{" + day_turns + "}}", "number:greaterorequal", f"{{{{{I}.limit}}}}")
+    under = c("{{" + day_turns + "}}", "number:less", f"{{{{{I}.limit}}}}")
+    Q = b.to_json("問題轉 JSON", "{{substring(" + text[2:-2] + "; 0; 800)}}")
+    load = b.line("顯示輸入中", "/v2/bot/chat/loading/start", "POST", {"chatId": uid, "loadingSeconds": 20}, onerror=[b.ignore()])
+    ans_schema = ('{"type":"OBJECT","properties":{"answer":{"type":"STRING","description":"給會員的回答"},'
+                  '"found":{"type":"BOOLEAN","description":"FAQ 知識庫裡有沒有這個問題的答案"}},"required":["answer","found"]}')
+    gem = b.gemini("Gemini 回答",
+                   '{"system_instruction":{"parts":[{"text":' + f"{{{{{I}.system}}}}" + '}]},'
+                   '"contents":[{"role":"user","parts":[{"text":"【之前的對話】' + f"{{{{{I}.transcript}}}}" + '\\n\\n【會員現在的問題】\\n' + inner(Q["id"]) + '"}]}],'
+                   '"generationConfig":{"responseMimeType":"application/json","responseSchema":' + ans_schema + '}}',
+                   onerror=[b.reply("回暫時無法回答", token, j("小幫手暫時無法回答，請稍後再問一次。")), b.ignore()])
+    P = b.parse("讀出回答", f"{{{{{gem['id']}.body.candidates[1].content.parts[1].text}}}}")
+    A = b.to_json("回答轉 JSON", "{{substring(" + f"{P['id']}.answer" + "; 0; 1800)}}")
+    newseq2 = "{{" + f"{I}.seq + 1" + "}}"
+    upd = b.ds_update("記下這一回合", uid, {
+        "last": "{{now}}", "seq": newseq2, "turns": "{{" + f"{I}.turns + 1" + "}}", "day": TODAY,
+        "day_turns": "{{" + day_turns + " + 1}}",
+        "transcript": f"{{{{{I}.transcript}}}}" + "\\n會員：" + inner(Q["id"]) + "\\nAI：" + inner(A["id"]),
+        "blocks": f"{{{{{I}.blocks}}}}," + para("會員：", inner(Q["id"])) + "," + para("AI：", inner(A["id"])),
+        "unanswered": "{{if(" + f"{P['id']}.found; {I}.unanswered; true)" + "}}"})
+    G2 = b.ds_get("五分鐘後讀暫存（回答）", uid)
+    answer = [b.router("每日上限", [
+        (flt("超過每日上限", [[over]]), [b.reply("回已達上限", token, j("今天的提問次數已經用完了，明天再來問我喔！"))]),
+        (flt("還可以問", [[under]]), [Q, load, gem, P, A, b.reply("回覆答案", token, f"{{{{{A['id']}.json}}}}"), upd,
+                                       b.sleep("等閒置時間（回答）", f"{{{{{I}.idle}}}}"), G2,
+                                       *assistant_close(b, G2["id"], uid, "逾時", [c(f"{{{{{G2['id']}.seq}}}}", "text:equal", newseq2)])]),
+    ])]
+
+    # --- 輸入「結束」：回結束語，馬上整理紀錄 ---
+    end = [b.reply("回結束語", token, f"{{{{{I}.bye}}}}"), *assistant_close(b, I, uid, "輸入結束", [])]
+
+    return [S, b.router("小幫手", [
+        (flt("叫醒小幫手", [[c(text, "text:equal", KEYWORD)]]), wake),
+        (flt("結束對話", [[c(text, "text:equal", END_WORD), active]]), end),
+        (flt("對話中的問題", [[active, c(text, "text:notequal", KEYWORD), c(text, "text:notequal", END_WORD)]]), answer),
+    ])]
+
+
 def build_events():
-    """LINE 事件：加好友（follow）就在名冊建一筆非會員；封鎖（unfollow）時標記。只處理每次送來的第一個事件。"""
+    """LINE 事件：加好友（follow）就在名冊建一筆非會員；封鎖（unfollow）時標記；
+    文字訊息交給 AI 小幫手（按選單「AI 小幫手」送出關鍵字叫醒）。只處理每次送來的第一個事件。"""
     b = B()
-    uid, typ = "{{1.events[1].source.userId}}", "{{1.events[1].type}}"
+    ev = "{{1.events[1]"
+    uid, typ = ev + ".source.userId}}", ev + ".type}}"
+    text, token = ev + ".message.text}}", ev + ".replyToken}}"
     w = b.find_member("找名冊", uid)
-    w["filter"] = flt("只處理加好友、封鎖", [[c(typ, "text:equal", "follow")], [c(typ, "text:equal", "unfollow")]])
     W = w["id"]
     exist, none = c(f"{{{{{W}.id}}}}", "exist"), c(f"{{{{{W}.id}}}}", "notexist")
     prof = b.line("取得 LINE 名稱", f"/v2/bot/profile/{uid}")
+    friend = [w, b.router("加好友或封鎖", [
+        (flt("新好友", [[c(typ, "text:equal", "follow"), none]]), [
+            prof,
+            b.create("新增非會員", [fv("姓名", "title", f"（LINE）{{{{{prof['id']}.body.displayName}}}}"),
+                                 fv("身分", "select", "非會員"), fv("好友狀態", "select", "好友中"),
+                                 fv("LINE 顯示名稱", "rich_text", f"{{{{{prof['id']}.body.displayName}}}}"),
+                                 fv("LINE User ID", "rich_text", uid), fv("目前選單", "select", "訪客"), now("加入好友時間")])]),
+        (flt("重新加好友", [[c(typ, "text:equal", "follow"), exist]]), [
+            b.update("改回好友中", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "好友中")])]),
+        (flt("封鎖", [[c(typ, "text:equal", "unfollow"), exist]]), [
+            b.update("標記已封鎖", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "已封鎖")])]),
+    ])]
     flow = [
         {"id": 1, "module": "line:watchMessages", "version": 1, "mapper": {},
          "metadata": {"designer": {"x": -300, "y": 0, "name": "LINE 事件"},
                       "parameters": [{"name": "__IMTHOOK__", "type": "hook:line", "label": "Webhook", "required": True}]},
          "parameters": {"__IMTHOOK__": MK["events_hook_id"]}},
-        w,
         b.router("依事件分流", [
-            (flt("新好友", [[c(typ, "text:equal", "follow"), none]]), [
-                prof,
-                b.create("新增非會員", [fv("姓名", "title", f"（LINE）{{{{{prof['id']}.body.displayName}}}}"),
-                                     fv("身分", "select", "非會員"), fv("好友狀態", "select", "好友中"),
-                                     fv("LINE 顯示名稱", "rich_text", f"{{{{{prof['id']}.body.displayName}}}}"),
-                                     fv("LINE User ID", "rich_text", uid), fv("目前選單", "select", "訪客"), now("加入好友時間")])]),
-            (flt("重新加好友", [[c(typ, "text:equal", "follow"), exist]]), [
-                b.update("改回好友中", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "好友中")])]),
-            (flt("封鎖", [[c(typ, "text:equal", "unfollow"), exist]]), [
-                b.update("標記已封鎖", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "已封鎖")])]),
+            (flt("加好友、封鎖", [[c(typ, "text:equal", "follow")], [c(typ, "text:equal", "unfollow")]]), friend),
+            (flt("文字訊息", [[c(typ, "text:equal", "message"), c(ev + ".message.type}}", "text:equal", "text")]]),
+             assistant_flow(b, uid, text, token)),
         ]),
     ]
-    return blueprint(PREFIX + "會員：LINE 事件（自動執行）", flow)
+    bp = blueprint(PREFIX + "會員：LINE 事件（自動執行）", flow)
+    # 小幫手每則訊息會等閒置時間，必須能同時處理多位會員
+    bp["metadata"]["scenario"]["sequential"] = False
+    return bp
 
 
 def build_menu():
@@ -550,10 +756,12 @@ def build_menu():
     b = B(10)
     uri = lambda u: {"type": "uri", "uri": u}
 
-    def area(col, row, url, span=1):
+    def area(col, row, url, span=1, action=None):
         x = COLS[col]
-        return {"bounds": {"x": x, "y": row * ROW, "width": COLS[col + span] - x, "height": ROW}, "action": uri(url)}
-    top = [area(0, 0, MEMBER_LIFF + "?v=news"), area(1, 0, MEMBER_LIFF + "?v=courses"), area(2, 0, MEMBER_LIFF + "?v=ai")]
+        return {"bounds": {"x": x, "y": row * ROW, "width": COLS[col + span] - x, "height": ROW}, "action": action or uri(url)}
+    # AI 小幫手：在聊天室送出關鍵字叫醒（LINE 事件情境接手）
+    top = [area(0, 0, MEMBER_LIFF + "?v=news"), area(1, 0, MEMBER_LIFF + "?v=courses"),
+           area(2, 0, None, action={"type": "message", "label": "AI 小幫手", "text": KEYWORD})]
     site = b.notion_api("讀前台設定（選單圖）", f"/v1/pages/{SETTINGS_PAGE}")
     S = site["id"]
 

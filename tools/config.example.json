@@ -6,7 +6,9 @@
     "line_connection_id": 0,
     "api_hook_id": 0,
     "events_hook_id": 0,
-    "gdrive_connection_id": 0
+    "gdrive_connection_id": 0,
+    "gemini_connection_id": 0,
+    "assistant_datastore_id": 0
   },
   "line": {
     "login_channel_id": "LINE Login channel 的 Channel ID",
@@ -19,12 +21,20 @@
     "content_data_source_id": "「內容庫」的 data source ID（最新消息、課程都在這張，用「標籤」分）",
     "content_list_property_ids": [
       "（內容庫除了「內容連結」「備註」以外的欄位 ID）"
-    ]
+    ],
+    "assistant_rules_data_source_id": "「🤖 小幫手指示」的 data source ID",
+    "faq_data_source_id": "「📖 FAQ 知識庫」的 data source ID",
+    "assistant_log_data_source_id": "「💬 小幫手對話紀錄」的 data source ID"
   },
   "approve_key": "隨機密鑰（也寫在 Notion 會員名冊的「核准按鈕」「套用身分按鈕」公式裡）",
   "page_origin": "https://philko2017.github.io",
   "repo": "phil-ai-academy",
   "drive": {
     "folder_id": "圖床資料夾 ID（Google 雲端硬碟「會員通圖床／專案名稱」網址最後一段）"
+  },
+  "assistant": {
+    "model": "gemini-flash-latest",
+    "keyword": "AI小幫手",
+    "end_word": "結束"
   }
 }
