@@ -112,9 +112,9 @@ function renderSoon([icon, title, key]) {
     <div class="links">${navLink("home", "🪪", "會員專區", "入會申請、我的會員資料")}</div>`;
 }
 const navLink = (v, ic, title, sub, id = "") => `<a class="link" href="?v=${v}${id ? "&id=" + id : ""}" data-nav="${v}" data-id="${esc(id)}"><span class="ic">${ic}</span><span><b>${esc(title)}</b><small>${esc(sub)}</small></span></a>`;
-// 圖片：有雲端硬碟圖床網址（Make「圖片：上傳到雲端硬碟」寫回的）就用 Google 縮圖，16:9、webp，手機會暫存一天；
-// 還沒上傳的先用 Notion 原圖（網址每小時換一次，不能暫存）
-const SIZES = { list: "w640-h360-c-rw", full: "w1280-h720-c-rw" };
+// 圖片：有雲端硬碟圖床網址（Make「圖片：上傳到雲端硬碟」寫回的）就用 Google 縮圖：裁成 16:9、JPEG 品質 80，手機會暫存一天。
+// 不用 webp：PNG 原圖轉出來是無損 webp，1280 寬還有 1MB（2026-10-23 實測）。還沒上傳的先用 Notion 原圖（網址每小時換一次，不能暫存）
+const SIZES = { list: "w640-h360-c-rj-l80", full: "w1280-h720-c-rj-l80" };
 const pic = (hosted, original, size) => hosted ? hosted.split("#")[0] + "=" + SIZES[size] : original;
 const cover = (url, alt) => url ? `<img class="cover" src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async">` : "";
 // 有沒有權限看某個開放對象的內容（Make 點開時會再檢查一次）
