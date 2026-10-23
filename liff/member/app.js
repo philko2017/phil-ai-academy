@@ -88,7 +88,7 @@ function render() {
   $("#badge").className = b ? "badge " + b[0] : "";
   $("#badge").textContent = b ? b[1] : "";
   $("#bar").hidden = true;
-  if (!S.me) { $("#app").innerHTML = `<p class="blocked">讀取中…</p>`; return; }
+  if (!S.me) { $("#app").innerHTML = loading(); return; }
   if (S.view === "about") return renderAbout();
   if (LISTS[S.view]) return S.id ? renderItem(S.view) : renderList(S.view);
   if (S.view === "admin") return renderAdmin();
@@ -111,6 +111,9 @@ function renderSoon([icon, title, key]) {
     <p class="lead" style="margin-top:14px;font-weight:700;color:var(--brand)">即將推出</p></div>
     <div class="links">${navLink("home", "🪪", "會員專區", "入會申請、我的會員資料")}</div>`;
 }
+// 等待中：文字後面三個點輪流跳動（動畫在 index.html 的 .dots）
+const DOTS = `<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>`;
+const loading = (text = "讀取中") => `<p class="blocked" role="status">${text}${DOTS}</p>`;
 const navLink = (v, ic, title, sub, id = "") => `<a class="link" href="?v=${v}${id ? "&id=" + id : ""}" data-nav="${v}" data-id="${esc(id)}"><span class="ic">${ic}</span><span><b>${esc(title)}</b><small>${esc(sub)}</small></span></a>`;
 // 圖片：有雲端硬碟圖床網址（Make「圖片：上傳到雲端硬碟」寫回的）就用 Google 縮圖：裁成 16:9、JPEG 品質 80，手機會暫存一天。
 // 不用 webp：PNG 原圖轉出來是無損 webp，1280 寬還有 1MB（2026-10-23 實測）。還沒上傳的先用 Notion 原圖（網址每小時換一次，不能暫存）
@@ -145,7 +148,7 @@ const LISTS = { news: ["news", api => api.news, r => r.news, "最新消息"], co
 function loadList(view) {
   const [key, call, pick] = LISTS[view];
   if (S[key]) return S[key];
-  $("#app").innerHTML = `<p class="blocked">讀取中…</p>`;
+  $("#app").innerHTML = loading();
   need(key, call(api), pick).then(ok => ok && render());
   return null;
 }
@@ -182,7 +185,7 @@ function renderItem(view) {
 }
 async function openItem() {
   if (S.busy) return;
-  S.busy = true; $("#openItem").disabled = true; $("#openItem").textContent = "開啟中…";
+  S.busy = true; $("#openItem").disabled = true; $("#openItem").innerHTML = "開啟中" + DOTS;
   try {
     const r = await api.open(S.id);
     if (!r.link) throw new ApiError("no_link");
@@ -200,7 +203,7 @@ const OPS = { 審核中: [["approve", "核准入會"]], 一般會員: [["premium
 const OP_DONE = { approve: "一般會員", premium: "高級會員", ban: "停權", restore: "一般會員" };
 function renderAdmin() {
   if (!IS_ADMIN()) { $("#app").innerHTML = `<div class="blocked"><h2>只有管理者可以使用</h2></div>`; return; }
-  if (!S.members) { $("#app").innerHTML = `<p class="blocked">讀取名冊中…</p>`; need("members", api.adminList, r => r.members).then(ok => ok && render()); return; }
+  if (!S.members) { $("#app").innerHTML = loading("讀取名冊中"); need("members", api.adminList, r => r.members).then(ok => ok && render()); return; }
   const m = S.members;
   const count = id => m.filter(x => x["身分"] === id).length;
   $("#app").innerHTML = `<h1>管理會員</h1>
@@ -257,7 +260,7 @@ function renderApply() {
     <div class="card"><h2>③ 基本資料</h2>${FIELDS.map(([k, label, req, type]) => input(k, label, req, type, f)).join("")}</div>
     ${editing ? `<button class="ghost" id="cancelEdit">← 不修改了</button>` : ""}`;
   $("#bar").hidden = false;
-  $("#barIn").innerHTML = `<button class="primary" id="send" ${S.busy ? "disabled" : ""}>${S.busy ? "送出中…" : editing ? "送出修改" : renew ? "送出續費" : "送出申請"}</button>`;
+  $("#barIn").innerHTML = `<button class="primary" id="send" ${S.busy ? "disabled" : ""}>${S.busy ? "送出中" + DOTS : editing ? "送出修改" : renew ? "送出續費" : "送出申請"}</button>`;
 }
 function renderPending() {
   $("#app").innerHTML = `<div class="status"><div class="big">⏳</div><h2>入會申請審核中</h2>
@@ -288,7 +291,7 @@ function renderProfileEdit() {
     <div class="card">${FIELDS.map(([k, label, req, type]) => input(k, label, req, type, S.form)).join("")}</div>
     <button class="ghost" id="cancelProfile">← 不修改了</button>`;
   $("#bar").hidden = false;
-  $("#barIn").innerHTML = `<button class="primary" id="saveProfile" ${S.busy ? "disabled" : ""}>${S.busy ? "儲存中…" : "儲存"}</button>`;
+  $("#barIn").innerHTML = `<button class="primary" id="saveProfile" ${S.busy ? "disabled" : ""}>${S.busy ? "儲存中" + DOTS : "儲存"}</button>`;
 }
 // 到期前 REMIND_DAYS 天開始提醒；不推播，只在會員畫面上顯示
 function expiryNotice() {
