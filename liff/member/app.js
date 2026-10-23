@@ -112,7 +112,11 @@ function renderSoon([icon, title, key]) {
     <div class="links">${navLink("home", "🪪", "會員專區", "入會申請、我的會員資料")}</div>`;
 }
 const navLink = (v, ic, title, sub, id = "") => `<a class="link" href="?v=${v}${id ? "&id=" + id : ""}" data-nav="${v}" data-id="${esc(id)}"><span class="ic">${ic}</span><span><b>${esc(title)}</b><small>${esc(sub)}</small></span></a>`;
-const cover = (url, alt) => url ? `<img class="cover" src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy">` : "";
+// 圖片：有雲端硬碟圖床網址（Make「圖片：上傳到雲端硬碟」寫回的）就用 Google 縮圖，16:9、webp，手機會暫存一天；
+// 還沒上傳的先用 Notion 原圖（網址每小時換一次，不能暫存）
+const SIZES = { list: "w640-h360-c-rw", full: "w1280-h720-c-rw" };
+const pic = (hosted, original, size) => hosted ? hosted.split("#")[0] + "=" + SIZES[size] : original;
+const cover = (url, alt) => url ? `<img class="cover" src="${esc(url)}" alt="${esc(alt || "")}" loading="lazy" decoding="async">` : "";
 // 有沒有權限看某個開放對象的內容（Make 點開時會再檢查一次）
 function canSee(aud) {
   if (IS_ADMIN() || aud === "公開") return true;
@@ -145,7 +149,7 @@ function loadList(view) {
   need(key, call(api), pick).then(ok => ok && render());
   return null;
 }
-const thumb = it => cover(it["封面"], it["標題"]) || `<div class="cover ph">${esc(it["類型"])}</div>`;
+const thumb = (it, size = "list") => cover(pic(it["封面網址"], it["封面"], size), it["標題"]) || `<div class="cover ph">${esc(it["類型"])}</div>`;
 const lockText = it => it["開放對象"] === "單獨購買" ? money(it["價格"]) : it["開放對象"] + "專屬";
 function itemCard(it, view) {
   return `<a class="card item" href="?v=${view}&id=${it.id}" data-nav="${view}" data-id="${it.id}">
@@ -171,7 +175,7 @@ function renderItem(view) {
     : aud === "單獨購買" ? `<button class="primary" disabled>購買 ${money(it["價格"])}（即將推出）</button>`
     : IS_MEMBER(st) ? `<p class="notice">這是高級會員專屬內容，升級請洽管理者。</p>`
     : `<a class="primary btn" href="?v=home" data-nav="home">申請加入，解鎖內容</a>`;
-  $("#app").innerHTML = `<div class="detail">${thumb(it)}
+  $("#app").innerHTML = `<div class="detail">${thumb(it, "full")}
     <p class="meta">${esc([it["類型"], aud, it["上架日期"]].filter(Boolean).join(" · "))}</p><h1>${esc(it["標題"])}</h1><p class="lead">${esc(it["公開摘要"])}</p>
     <div class="cta">${cta}${!ok && it["試看連結"] ? `<a class="ghost" href="${esc(it["試看連結"])}" target="_blank" rel="noopener">先試看 →</a>` : ""}</div></div>
     <div class="links">${back}</div>`;
@@ -240,7 +244,7 @@ function renderApply() {
   if (!planOf(f.plan) && S.plans[0]) f.plan = S.plans[0].name;
   const plan = planOf(f.plan);
   const lead = editing ? "修改後重新送出，管理者會看到最新的資料。" : fill(renew ? s["已到期說明"] : s["申請說明"], S.me);
-  $("#app").innerHTML = `${editing ? "" : cover(s["邀請圖"], "邀請加入")}<h1>${editing ? "修改申請" : renew ? "續費" : "申請入會"}</h1>
+  $("#app").innerHTML = `${editing ? "" : cover(pic(s["邀請圖網址"], s["邀請圖"], "full"), "邀請加入")}<h1>${editing ? "修改申請" : renew ? "續費" : "申請入會"}</h1>
     <p class="lead">${lead}</p>
     <div class="card"><h2>① 選擇方案</h2><div class="plans">${S.plans.map(p => `<label class="plan ${p.name === f.plan ? "on" : ""}">
       <input type="radio" name="plan" value="${esc(p.name)}" ${p.name === f.plan ? "checked" : ""}>

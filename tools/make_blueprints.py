@@ -8,6 +8,8 @@
     頁面上的文字、圖片、方案、收款帳戶都從 Notion「前台設定」「方案」讀，repo 裡不放。
     Notion 核准連結：a=approve 核准入會｜a=sync 依身分套用選單（欄位 k 是密鑰、id 是名冊頁面 ID）
 - 會員_LINE事件.blueprint.json：「{專案}｜會員：LINE 事件」加好友就建一筆非會員；封鎖時標記
+- 圖片_上傳到雲端硬碟.blueprint.json：「{專案}｜圖片：上傳到雲端硬碟（手動執行）」把 Notion 的邀請圖、內容庫封面複製到
+    Google 雲端硬碟圖床（會員通圖床／專案名稱），網址寫回「邀請圖網址」「封面網址」，頁面再用縮圖網址顯示
 - 會員_建立圖文選單.blueprint.json：「{專案}｜會員：建立圖文選單（手動執行）」圖片讀 Notion「前台設定」的三個選單圖；
     訪客選單設為預設、會員選單設別名 member、管理者選單設別名 admin，清掉舊選單後把會員、管理者重新綁到新選單
 
@@ -30,6 +32,8 @@ ROOT = Path(__file__).resolve().parent.parent
 CFG = json.loads((ROOT / "tools" / ("config.example.json" if "--example" in sys.argv else "config.local.json")).read_text(encoding="utf-8"))
 MK, LN = CFG["make"], CFG["line"]
 CONN_NOTION, CONN_LINE = MK["notion_connection_id"], MK["line_connection_id"]
+CONN_DRIVE = MK.get("gdrive_connection_id")
+DRIVE_FOLDER = CFG.get("drive", {}).get("folder_id", "")   # 圖床：Google 雲端硬碟「會員通圖床／專案名稱」
 DS = CFG["notion"]["data_source_id"]
 # 前台設定（一列）與方案：會員頁面上的文字、收款帳戶、價格都從這兩張 Notion 表讀，repo 裡不放
 SETTINGS_PAGE = CFG["notion"]["settings_page_id"]
@@ -219,7 +223,8 @@ class B:
         rs = []
         for f, mods in routes:
             mods = [dict(m) for m in mods]
-            mods[0]["filter"] = f
+            if f:
+                mods[0]["filter"] = f
             rs.append({"flow": mods})
         self.y += 150
         return {"id": mid, "module": "builtin:BasicRouter", "version": 1, "mapper": None,
@@ -618,11 +623,62 @@ def build_menu():
     return bp
 
 
+def build_images():
+    """圖床：把 Notion 上傳的封面、邀請圖複製到 Google 雲端硬碟（設成知道連結就能看），再把固定網址寫回 Notion。
+    頁面用 lh3.googleusercontent.com/d/{檔案ID}=w640-h360-c-rw 這種網址，Google 會縮圖、轉 webp，手機也能暫存。
+    網址最後的「#檔名」用來判斷換過圖沒有：檔名不同就重新上傳。內容放好之後手動執行。"""
+    b = B(10)
+    meta_drive = [{"name": "__IMTCONN__", "type": "account:google-restricted,google-drive", "label": "Connection", "required": True}]
+
+    def to_drive(label, src, name, page, prop):
+        dl = {"id": b.nid(), "module": "http:DownloadFile", "version": 4, "parameters": {"authenticationType": "noAuth"},
+              "mapper": {"url": src, "shareCookies": False, "stopOnHttpError": True}, "metadata": b.meta(f"下載{label}")}
+        up = {"id": b.nid(), "module": "google-drive:uploadAFile", "version": 4, "parameters": {"__IMTCONN__": CONN_DRIVE},
+              "mapper": {"data": f"{{{{{dl['id']}.data}}}}", "select": "value", "convert": False,
+                         "filename": f"{{{{{dl['id']}.fileName}}}}", "folderId": "/" + DRIVE_FOLDER, "destination": "drive"},
+              "metadata": b.meta(f"{label}上傳到雲端硬碟", meta_drive)}
+        share = {"id": b.nid(), "module": "google-drive:shareAFileFolder", "version": 4, "parameters": {"__IMTCONN__": CONN_DRIVE},
+                 "mapper": {"file": f"{{{{{up['id']}.id}}}}", "role": "reader", "type": "anyone", "select": "file",
+                            "destination": "drive", "allowFileDiscovery": False},
+                 "metadata": b.meta(f"{label}設成知道連結就能看", meta_drive)}
+        url = f"https://lh3.googleusercontent.com/d/{{{{{up['id']}.id}}}}#{{{{encodeURL({name})}}}}"
+        save = b.notion_api(f"寫回{prop}", f"/v1/pages/{page}", "PATCH", '{"properties":{"' + prop + '":{"url":"' + url + '"}}}')
+        return [dl, up, share, save]
+
+    def need(label, url_prop, name):
+        # 還沒有網址，或網址最後的檔名跟現在的圖不同（換過圖）
+        return flt(f"{label}要上傳", [[c(name, "exist"), c(url_prop, "text:notcontain", "#{{encodeURL(" + name[2:-2] + ")}}")]])
+
+    site = b.notion_api("讀前台設定", f"/v1/pages/{SETTINGS_PAGE}")
+    S = site["id"]
+    inv = f"{S}.body.properties.`邀請圖`.files[1]"
+    inv_name, inv_src = f"{{{{{inv}.name}}}}", "{{ifempty(" + inv + ".file.url; " + inv + ".external.url)}}"
+    inv_flow = to_drive("邀請圖", inv_src, inv_name[2:-2], SETTINGS_PAGE, "邀請圖網址")
+
+    q = b.notion_api("找有封面的內容", f"/v1/data_sources/{CONTENT_DS}/query", "POST",
+                     '{"filter":{"property":"封面","files":{"is_not_empty":true}},"page_size":100}')
+    feed = {"id": b.nid(), "module": "builtin:BasicFeeder", "version": 1, "mapper": {"array": f"{{{{{q['id']}.body.results}}}}"},
+            "metadata": b.meta("逐筆檢查封面")}
+    X = feed["id"]
+    cov = f"{X}.properties.`封面`.files[1]"
+    cov_name, cov_src = f"{{{{{cov}.name}}}}", "{{ifempty(" + cov + ".file.url; " + cov + ".external.url)}}"
+    cov_flow = to_drive("封面", cov_src, cov_name[2:-2], f"{{{{{X}.id}}}}", "封面網址")
+    cov_flow[0]["filter"] = need("封面", f"{{{{{X}.properties.`封面網址`.url}}}}", cov_name)
+
+    flow = [site, b.router("邀請圖與封面", [
+        (need("邀請圖", f"{{{{{S}.body.properties.`邀請圖網址`.url}}}}", inv_name), inv_flow),
+        (None, [q, feed, *cov_flow]),
+    ])]
+    bp = blueprint(PREFIX + "圖片：上傳到雲端硬碟（手動執行）", flow)
+    bp["metadata"]["instant"] = False
+    return bp
+
+
 def main():
     out = ROOT / "make" / ("example" if "--example" in sys.argv else "")
     out.mkdir(parents=True, exist_ok=True)
     for fname, bp in (("會員_API.blueprint.json", build_api()), ("會員_LINE事件.blueprint.json", build_events()),
-                      ("會員_建立圖文選單.blueprint.json", build_menu())):
+                      ("會員_建立圖文選單.blueprint.json", build_menu()), ("圖片_上傳到雲端硬碟.blueprint.json", build_images())):
         p = out / fname
         p.write_text(json.dumps(bp, ensure_ascii=False, indent=1), encoding="utf-8")
         print(p.relative_to(ROOT), p.stat().st_size)

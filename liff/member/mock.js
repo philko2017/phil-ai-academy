@@ -46,6 +46,8 @@
                  item("c4", "範例電子書", "數位產品", "單獨購買", ["課程"], 299, "#7048E8", "2026-10-18"),
                  item("n1", "（範例）學院開張", "公告", "公開", ["最新消息"], null, "#0CA678", "2026-10-23"),
                  item("n2", "（範例）會員直播", "公告", "一般會員", ["最新消息"], null, "", "2026-10-21")];
+  // 已上傳到雲端硬碟圖床的封面：頁面會加上縮圖參數
+  items[1].properties["封面網址"] = { type: "url", url: "https://lh3.googleusercontent.com/d/1LzP0MJLjtsQPYwVVYPdtIM71_cb2USPM#sample.png" };
   const tagged = tag => items.filter(x => x.properties["標籤"].multi_select.some(t => t.name === tag));
   const person = (id, name, ident, role) => row(id, { "姓名": { type: "title", title: [{ plain_text: name }] }, "身分": sel(ident),
     "電話": { type: "phone_number", phone_number: "0900-000-000" }, "方案": sel("方案 A"), "角色": { type: "multi_select", multi_select: role ? [{ name: role }] : [] },

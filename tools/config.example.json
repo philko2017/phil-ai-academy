@@ -5,7 +5,8 @@
     "notion_connection_id": 0,
     "line_connection_id": 0,
     "api_hook_id": 0,
-    "events_hook_id": 0
+    "events_hook_id": 0,
+    "gdrive_connection_id": 0
   },
   "line": {
     "login_channel_id": "LINE Login channel 的 Channel ID",
@@ -22,5 +23,8 @@
   },
   "approve_key": "隨機密鑰（也寫在 Notion 會員名冊的「核准按鈕」「套用身分按鈕」公式裡）",
   "page_origin": "https://philko2017.github.io",
-  "repo": "phil-ai-academy"
+  "repo": "phil-ai-academy",
+  "drive": {
+    "folder_id": "圖床資料夾 ID（Google 雲端硬碟「會員通圖床／專案名稱」網址最後一段）"
+  }
 }
