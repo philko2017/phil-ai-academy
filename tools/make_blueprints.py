@@ -38,8 +38,8 @@ DRIVE_FOLDER = CFG.get("drive", {}).get("folder_id", "")   # 圖床：Google 雲
 CONN_GEMINI = MK.get("gemini_connection_id")
 ASSIST_DS = MK.get("assistant_datastore_id")
 AS = CFG.get("assistant", {})
-GEMINI_MODEL = AS.get("model", "gemini-flash-latest")
-GEMINI_FALLBACK = AS.get("fallback_model", "gemini-flash-lite-latest")   # 主模型忙線（503）時改用
+GEMINI_MODEL = AS.get("model", "gemini-3.5-flash-lite")   # 用確切的模型 ID，「latest」別名有時找不到模型
+GEMINI_FALLBACK = AS.get("fallback_model", "gemini-3.1-flash-lite")   # 主模型忙線（503）時改用
 KEYWORD, END_WORD = AS.get("keyword", "AI小幫手"), AS.get("end_word", "結束")
 DS = CFG["notion"]["data_source_id"]
 # 前台設定（一列）與方案：會員頁面上的文字、收款帳戶、價格都從這兩張 Notion 表讀，repo 裡不放

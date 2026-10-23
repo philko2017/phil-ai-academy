@@ -33,9 +33,9 @@
     "folder_id": "圖床資料夾 ID（Google 雲端硬碟「會員通圖床／專案名稱」網址最後一段）"
   },
   "assistant": {
-    "model": "gemini-flash-latest",
+    "model": "gemini-3.5-flash-lite",
     "keyword": "AI小幫手",
     "end_word": "結束",
-    "fallback_model": "gemini-flash-lite-latest"
+    "fallback_model": "gemini-3.1-flash-lite"
   }
 }
