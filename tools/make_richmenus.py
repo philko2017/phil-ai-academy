@@ -1,6 +1,6 @@
 """會員通（LINE Member Kit）：產生三張圖文選單圖片（2500 × 1686，上排三格、下排一整塊），輸出到 assets/richmenu/。
 
-- guest.png：訪客選單（非會員、審核中、已到期、停權）  上排：最新消息｜課程介紹｜AI 小幫手　下排：申請加入
+- guest.png：訪客選單（非會員、審核中、已到期、停權）  上排：最新消息｜我的課程｜AI 小幫手　下排：申請加入
 - member.png：會員選單（一般會員、高級會員）          上排：最新消息｜我的課程｜AI 小幫手　下排：會員專區
 - admin.png：管理者選單（名冊「角色」勾管理者）         上排：和會員相同　　　　　　　　　 下排：管理會員
 
@@ -106,11 +106,9 @@ def people_gear(d, cx, cy, s, col):
     d.ellipse([gx - r, gy - r, gx + r, gy + r], outline=col, width=lw)
 
 
-TOP = {
-    "guest": [("最新消息", "公告與活動", news), ("課程介紹", "免費試看・會員課程", play), ("AI 小幫手", "有問題就問", sparkle)],
-    "member": [("最新消息", "公告與活動", news), ("我的課程", "影片與數位產品", play), ("AI 小幫手", "有問題就問", sparkle)],
-}
-TOP["admin"] = TOP["member"]
+# 上排三張選單都一樣（所有人看到同一個「我的課程」頁，靠權限區分能不能進去）
+TOP = {"member": [("最新消息", "公告與活動", news), ("我的課程", "影片與數位產品", play), ("AI 小幫手", "有問題就問", sparkle)]}
+TOP["guest"] = TOP["admin"] = TOP["member"]
 BOTTOM = {
     "guest": ("申請加入", "選擇方案、完成匯款，送出申請", person_plus),
     "member": ("會員專區", "會籍・到期日・我的資料", card),

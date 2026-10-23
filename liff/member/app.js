@@ -144,7 +144,10 @@ function go(view, id = "", replace = false) {
 }
 
 // ===== 最新消息、課程：同一張 Notion 內容庫，用「標籤」決定出現在哪裡；卡片一律是縮圖、標題、一行簡介 =====
-const LISTS = { news: ["news", api => api.news, r => r.news, "最新消息"], courses: ["items", api => api.courses, r => r.items, ""] };
+// 課程列表跟「🧭 課程入口」一起回來，入口另外存在 S.entries
+const LISTS = { news: ["news", api => api.news, r => r.news, "最新消息"],
+                courses: ["items", api => api.courses, r => { S.entries = nrows(r.entries); return r.items; }, ""] };
+const PAGE_SIZE = 10;
 function loadList(view) {
   const [key, call, pick] = LISTS[view];
   if (S[key]) return S[key];
@@ -161,10 +164,31 @@ function itemCard(it, view) {
 }
 function renderList(view) {
   const list = loadList(view); if (!list) return;
-  const title = view === "news" ? "最新消息" : IS_MEMBER(S.me.state) || IS_ADMIN() ? "我的課程" : "課程介紹";
-  const empty = view === "news" ? "目前沒有消息" : S.site["課程預告"] || "課程準備中";
-  $("#app").innerHTML = `<h1>${title}</h1>${list.length ? `<div class="grid">${list.map(it => itemCard(it, view)).join("")}</div>`
-    : `<p class="blocked">${esc(empty)}</p>`}`;
+  if (view === "news") {
+    $("#app").innerHTML = `<h1>最新消息</h1>${list.length ? `<div class="grid">${list.map(it => itemCard(it, view)).join("")}</div>`
+      : `<p class="blocked">目前沒有消息</p>`}`;
+    return;
+  }
+  // 我的課程：所有人看到同一份；上方入口是篩選器，下方近期上架每頁 10 筆，沒權限的標 🔒
+  const entries = S.entries || [];
+  const entry = entries.find(e => e.id === S.filter);
+  const shown = entry ? list.filter(it => inEntry(it, entry)) : list;
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  S.page = Math.min(S.page || 0, pages - 1);
+  const slice = shown.slice(S.page * PAGE_SIZE, (S.page + 1) * PAGE_SIZE);
+  $("#app").innerHTML = `<h1>我的課程</h1>
+    ${entries.length ? `<div class="entries">${entries.map(e => `<button class="entry${e.id === S.filter ? " on" : ""}" data-entry="${e.id}">
+      ${e["圖片"] ? `<img src="${esc(e["圖片"])}" alt="" loading="lazy">` : ""}<span class="en"><b>${esc(e["名稱"])}</b><small>${esc(e["說明"])}</small></span></button>`).join("")}</div>` : ""}
+    <div class="sec"><h2>${entry ? esc(entry["名稱"]) : "近期上架"}</h2>${entry ? `<button class="chip" data-entry="">看全部</button>` : ""}</div>
+    ${slice.length ? `<div class="grid">${slice.map(it => itemCard(it, view)).join("")}</div>`
+      : `<p class="blocked">${esc(entry ? "這裡還沒有內容" : S.site["課程預告"] || "課程準備中")}</p>`}
+    ${pages > 1 ? `<div class="pager"><button id="prevPage" ${S.page ? "" : "disabled"}>‹ 上一頁</button>
+      <span>${S.page + 1} / ${pages}</span><button id="nextPage" ${S.page < pages - 1 ? "" : "disabled"}>下一頁 ›</button></div>` : ""}`;
+}
+// 入口的篩選條件：開放對象、類型都是多選，沒勾就不限
+function inEntry(it, e) {
+  const aud = e["開放對象"] || [], types = e["類型"] || [];
+  return (!aud.length || aud.includes(it["開放對象"])) && (!types.length || types.includes(it["類型"]));
 }
 function renderItem(view) {
   const list = loadList(view); if (!list) return;
@@ -373,6 +397,9 @@ document.addEventListener("click", async e => {
   if (row && !e.target.closest("button, input")) { S.sel = S.sel === row.dataset.sel ? "" : row.dataset.sel; $("#rows").innerHTML = adminRows(); return; }
   const t = e.target.closest("button"); if (!t) return;
   if (t.id === "back") { goBack(); return; }
+  const en = e.target.closest("[data-entry]");
+  if (en) { S.filter = S.filter === en.dataset.entry ? "" : en.dataset.entry; S.page = 0; render(); $(".sec").scrollIntoView({ behavior: "smooth" }); return; }
+  if (t.id === "prevPage" || t.id === "nextPage") { S.page += t.id === "nextPage" ? 1 : -1; render(); $(".sec").scrollIntoView(); return; }
   if (t.id === "openItem") { openItem(); return; }
   if (t.id === "goLink" && S.reader) { openLink(S.reader.url); return; }
   if (t.id === "edit") { S.editing = true; render(); return; }

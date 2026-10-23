@@ -3,7 +3,7 @@
 
 - 會員_API.blueprint.json：「{專案}｜會員 API（自動執行）」（欄位 t 是 LINE Access Token）
     a=me 我的身分＋前台設定＋方案＋是否管理者（順便校正選單）｜a=apply 申請入會＋匯款回報｜a=profile 會員自己改基本資料
-    a=news 內容庫標籤「最新消息」｜a=courses 內容庫標籤「課程」（列表都不含內容連結，上鎖的也列出來）｜a=course_open 依身分給內容連結（有影片檔就給 Notion 一小時有效的檔案網址）
+    a=news 內容庫標籤「最新消息」｜a=courses 內容庫標籤「我的課程」＋課程入口（列表都不含內容連結，上鎖的也列出來）｜a=course_open 依身分給內容連結（有上傳檔案就給 Notion 一小時有效的檔案網址）
     a=admin_list 名冊｜a=admin_set 核准、升級高級會員、停權、恢復（只有名冊「角色」勾管理者的人能用）
     頁面上的文字、圖片、方案、收款帳戶都從 Notion「前台設定」「方案」讀，repo 裡不放。
     Notion 核准連結：a=approve 核准入會｜a=sync 依身分套用選單（欄位 k 是密鑰、id 是名冊頁面 ID）
@@ -48,6 +48,7 @@ PLANS_DS = CFG["notion"]["plans_data_source_id"]
 CONTENT_DS = CFG["notion"]["content_data_source_id"]    # 內容庫（最新消息、課程、數位產品都在這裡，用「標籤」分）
 # 內容庫列表回傳的欄位（Notion 欄位 ID）：除了「內容連結」都要，連結只在點開時依身分給
 CONTENT_LIST_PROPS = CFG["notion"]["content_list_property_ids"]
+ENTRIES_DS = CFG["notion"].get("entries_data_source_id")       # 🧭 課程入口
 RULES_DS = CFG["notion"].get("assistant_rules_data_source_id")   # 🤖 小幫手指示
 FAQ_DS = CFG["notion"].get("faq_data_source_id")                 # 📖 FAQ 知識庫
 LOG_DS = CFG["notion"].get("assistant_log_data_source_id")       # 💬 小幫手對話紀錄
@@ -469,14 +470,21 @@ def build_api():
 
     # ==== 最新消息：會員和管理者看全部，其他人只看「公開」 ====
     # ==== 最新消息、課程：同一張內容庫，用「標籤」決定出現在哪裡；列表不帶「內容連結」，點開時才依身分給連結 ====
-    def list_flow(tag, key, sort):
+    def list_flow(tag, key, sort, entries=False):
         q = ('{"filter":{"and":[{"property":"上架狀態","select":{"equals":"上架"}},{"property":"標籤","multi_select":{"contains":"' + tag
              + '"}}]},"sorts":[' + sort + '],"page_size":100}')
         api = b.notion_api(f"讀內容庫（{tag}）", f"/v1/data_sources/{CONTENT_DS}/query?{LIST_QS}", "POST", q)
         js = b.to_json(f"{tag}轉 JSON", f"{{{{{api['id']}.body.results}}}}")
-        return [api, js, respond_json(f"回傳{tag}", f'{{"ok":true,"{key}":{{{{{js["id"]}.json}}}}}}')]
+        if not entries:
+            return [api, js, respond_json(f"回傳{tag}", f'{{"ok":true,"{key}":{{{{{js["id"]}.json}}}}}}')]
+        # 「我的課程」頁上方的入口（篩選器）：Notion「🧭 課程入口」，跟列表一起回傳，頁面不必多打一次
+        en = b.notion_api("讀課程入口", f"/v1/data_sources/{ENTRIES_DS}/query", "POST",
+                          '{"filter":{"property":"上架","checkbox":{"equals":true}},"sorts":[{"property":"排序","direction":"ascending"}]}')
+        ej = b.to_json("課程入口轉 JSON", f"{{{{{en['id']}.body.results}}}}")
+        return [api, js, en, ej, respond_json(f"回傳{tag}", f'{{"ok":true,"{key}":{{{{{js["id"]}.json}}}},"entries":{{{{{ej["id"]}.json}}}}}}')]
     news_flow = list_flow("最新消息", "news", '{"property":"上架日期","direction":"descending"}')
-    courses_flow = list_flow("課程", "items", '{"property":"排序","direction":"ascending"},{"property":"上架日期","direction":"descending"}')
+    # 所有人看到同一份「我的課程」：近期上架在前，頁面每 10 筆一頁
+    courses_flow = list_flow("我的課程", "items", '{"property":"上架日期","direction":"descending"}', entries=True)
 
     item = b.notion_api("讀要打開的內容", "/v1/pages/{{1.id}}",
                         onerror=[respond_json("回傳找不到內容", '{"ok":false,"error":"not_found"}', "404"), b.ignore()])
@@ -487,10 +495,13 @@ def build_api():
     allow = ("{{if(" + parent[2:-2] + f' = "{CONTENT_DS}"; if(' + status[2:-2] + ' = "上架"; if(' + w_admin[2:-2] + ' = "Y"; "Y"; if('
              + aud[2:-2] + ' = "公開"; "Y"; if(' + aud[2:-2] + ' = "一般會員"; if(' + wi + ' = "一般會員"; "Y"; if(' + wi
              + ' = "高級會員"; "Y"; "N")); if(' + aud[2:-2] + ' = "高級會員"; if(' + wi + ' = "高級會員"; "Y"; "N"); "N")))); "N"); "N")}}')
-    # 有上傳「影片檔」就給 Notion 的檔案網址（約一小時後失效，轉貼出去很快就看不到），頁面直接嵌入播放；沒有才給「內容連結」
-    vid = f"{I}.body.properties.`影片檔`.files[1].file.url"
+    # 有上傳「檔案」就給 Notion 的檔案網址（約一小時後失效，轉貼出去很快就看不到），頁面直接嵌入播放；沒有才給「內容連結」
+    vid = f"{I}.body.properties.`檔案`.files[1].file.url"
+    fname = f"lower({I}.body.properties.`檔案`.files[1].name)"
     link = "{{ifempty(" + vid + "; " + f"{I}.body.properties.`內容連結`.url" + ")}}"
-    video = "{{if(" + vid + '; "Y"; "N")}}'
+    # 影片在頁面裡播放；PDF 等其他檔案（電子書）直接打開
+    video = ("{{if(" + vid + "; if(contains(" + fname + '; ".mp4"); "Y"; if(contains(' + fname + '; ".mov"); "Y"; if(contains('
+             + fname + '; ".m4v"); "Y"; if(contains(' + fname + '; ".webm"); "Y"; "N")))); "N")}}')
     trial = f"{{{{{I}.body.properties.`試看連結`.url}}}}"
     # 導讀：Phil 為 YouTube 等外部影片寫的三五百字說明，跟連結一樣有權限才給
     intro = "{{join(map(" + f"{I}.body.properties.`導讀`.rich_text" + '; "plain_text"); "")}}'

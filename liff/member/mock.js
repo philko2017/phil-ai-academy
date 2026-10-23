@@ -40,14 +40,21 @@
     "類型": sel(type), "開放對象": sel(aud), "價格": { type: "number", number: price }, "公開摘要": text("（一行簡介，太長會被截斷，只顯示一行）"),
     "標籤": { type: "multi_select", multi_select: tags.map(name => ({ name })) }, "上架日期": { type: "date", date: { start: date } },
     "封面": cov ? file(pic(title, cov)) : { type: "files", files: [] } });
-  const items = [item("c1", "免費入門課", "教學影片", "公開", ["課程", "最新消息"], null, "#F59F00", "2026-10-22"),
-                 item("c2", "會員課程", "教學影片", "一般會員", ["課程"], null, "#3B5BDB", "2026-10-20"),
-                 item("c3", "高級課程", "教學影片", "高級會員", ["課程"], null, "", "2026-10-19"),
-                 item("c4", "範例電子書", "數位產品", "單獨購買", ["課程"], 299, "#7048E8", "2026-10-18"),
+  const items = [item("c1", "免費入門課", "教學影片", "公開", ["我的課程", "最新消息"], null, "#F59F00", "2026-10-22"),
+                 item("c2", "會員課程", "教學影片", "一般會員", ["我的課程"], null, "#3B5BDB", "2026-10-20"),
+                 item("c3", "高級課程", "教學影片", "高級會員", ["我的課程"], null, "", "2026-10-19"),
+                 item("c4", "範例電子書", "數位產品", "公開", ["我的課程"], null, "#7048E8", "2026-10-18"),
                  item("n1", "（範例）學院開張", "公告", "公開", ["最新消息"], null, "#0CA678", "2026-10-23"),
                  item("n2", "（範例）會員直播", "公告", "一般會員", ["最新消息"], null, "", "2026-10-21")];
   // 已上傳到雲端硬碟圖床的封面：頁面會加上縮圖參數
   items[1].properties["封面網址"] = { type: "url", url: "https://lh3.googleusercontent.com/d/1LzP0MJLjtsQPYwVVYPdtIM71_cb2USPM#sample.png" };
+  // 多加幾筆課程看換頁（每頁 10 筆）
+  for (let i = 1; i <= 9; i++) items.push(item("x" + i, "範例課程 " + i, "教學影片", i % 3 ? "一般會員" : "公開", ["我的課程"], null, "", "2026-09-" + String(30 - i).padStart(2, "0")));
+  const ms = v => ({ type: "multi_select", multi_select: v.map(name => ({ name })) });
+  const entries = [["e1", "免費入門課", "免費看的入門課程", ["公開"], ["教學影片"], "#F59F00"], ["e2", "會員課程", "一般會員的完整課程", ["一般會員"], ["教學影片"], "#3B5BDB"],
+                   ["e3", "高級課程", "高級會員專屬", ["高級會員"], ["教學影片"], "#0CA678"], ["e4", "免費電子書", "可以下載的 PDF", ["公開"], ["數位產品"], "#7048E8"]]
+    .map(([id, name, desc, aud, type, col]) => row(id, { "名稱": { type: "title", title: [{ plain_text: name }] }, "說明": text(desc),
+      "開放對象": ms(aud), "類型": ms(type), "圖片": file(pic(name, col)) }));
   const tagged = tag => items.filter(x => x.properties["標籤"].multi_select.some(t => t.name === tag));
   const person = (id, name, ident, role) => row(id, { "姓名": { type: "title", title: [{ plain_text: name }] }, "身分": sel(ident),
     "電話": { type: "phone_number", phone_number: "0900-000-000" }, "方案": sel("方案 A"), "角色": { type: "multi_select", multi_select: role ? [{ name: role }] : [] },
@@ -59,7 +66,7 @@
     async apply(f) { await wait(700); me = { ...me, ...f, state: ["guest", "expired"].includes(me.state) ? "pending" : me.state }; return { ...me }; },
     async profile(f) { await wait(500); me = { ...me, ...f }; return { ok: true }; },
     async news() { await wait(400); return { news: tagged("最新消息") }; },
-    async courses() { await wait(400); return { items: tagged("課程") }; },
+    async courses() { await wait(400); return { items: tagged("我的課程"), entries }; },
     // c2 模擬 Notion 上傳的影片（頁面內播放），其他模擬外部連結
     async open(id) { await wait(400); return id === "c2" ? { link: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", video: "Y" }
       : id === "c1" ? { link: "https://www.youtube.com/", intro: "（範例導讀）這支影片值得看的三個重點：\n一、……\n二、……\n三、……" } : { link: "https://example.com/" }; },
