@@ -1,13 +1,13 @@
 """會員通（LINE Member Kit）：產生會員模組的 Make 藍圖，輸出到 make/（最早改寫自 philko2017/line-namecard 的 tools/make_member_blueprint.py）。
 情境名稱前綴、Notion 編號、LINE 編號都從 tools/config.local.json 讀，換客戶不用改這支程式。
 
-- 會員_API.blueprint.json：「{專案}｜會員 API」（欄位 t 是 LINE Access Token）
+- 會員_API.blueprint.json：「{專案}｜會員 API（自動執行）」（欄位 t 是 LINE Access Token）
     a=me 我的身分＋前台設定＋方案＋是否管理者（順便校正選單）｜a=apply 申請入會＋匯款回報｜a=profile 會員自己改基本資料
     a=news 內容庫標籤「最新消息」｜a=courses 內容庫標籤「課程」（列表都不含內容連結，上鎖的也列出來）｜a=course_open 依身分給內容連結
     a=admin_list 名冊｜a=admin_set 核准、升級高級會員、停權、恢復（只有名冊「角色」勾管理者的人能用）
     頁面上的文字、圖片、方案、收款帳戶都從 Notion「前台設定」「方案」讀，repo 裡不放。
     Notion 核准連結：a=approve 核准入會｜a=sync 依身分套用選單（欄位 k 是密鑰、id 是名冊頁面 ID）
-- 會員_LINE事件.blueprint.json：「{專案}｜會員：LINE 事件」加好友就建一筆非會員；封鎖時標記
+- 會員_LINE事件.blueprint.json：「{專案}｜會員：LINE 事件（自動執行）」加好友就建一筆非會員；封鎖時標記
 - 圖片_上傳到雲端硬碟.blueprint.json：「{專案}｜圖片：上傳到雲端硬碟（手動執行）」把 Notion 的邀請圖、內容庫封面複製到
     Google 雲端硬碟圖床（會員通圖床／專案名稱），網址寫回「邀請圖網址」「封面網址」，頁面再用縮圖網址顯示
 - 會員_建立圖文選單.blueprint.json：「{專案}｜會員：建立圖文選單（手動執行）」圖片讀 Notion「前台設定」的三個選單圖；
@@ -49,7 +49,7 @@ CHANNEL = LN["login_channel_id"]
 MEMBER_LIFF = f"https://liff.line.me/{LN['liff_id']}"
 ORIGIN = CFG.get("page_origin") or "*"
 REPO = CFG.get("repo", "phil-ai-academy")
-# 情境名稱前面加專案名，例如「{專案}｜會員 API」（另外在 Make 用同名資料夾和標籤分類）
+# 情境名稱前面加專案名、最後標明（自動執行）或（手動執行），例如「{專案}｜會員 API（自動執行）」（另外在 Make 用同名資料夾和標籤分類）
 PREFIX = f"{CFG['project']}｜" if CFG.get("project") else ""
 ALIAS, ALIAS_ADMIN = "member", "admin"   # 會員選單、管理者選單的別名；訪客選單是所有人的預設
 # 選單是上下兩列、每列三欄（2500 × 1686）
@@ -508,7 +508,7 @@ def build_api():
                 respond_json("回傳格式不對", '{"ok":false,"error":"bad_request"}', "400")]),
         ]),
     ]
-    return blueprint(PREFIX + "會員 API", flow)
+    return blueprint(PREFIX + "會員 API（自動執行）", flow)
 
 
 def build_events():
@@ -539,7 +539,7 @@ def build_events():
                 b.update("標記已封鎖", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "已封鎖")])]),
         ]),
     ]
-    return blueprint(PREFIX + "會員：LINE 事件", flow)
+    return blueprint(PREFIX + "會員：LINE 事件（自動執行）", flow)
 
 
 def build_menu():
