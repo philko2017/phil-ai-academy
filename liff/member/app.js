@@ -4,6 +4,7 @@
 const CONFIG = {
   liffId: "2012161136-mSmbv0VR",
   apiUrl: "https://hook.us2.make.com/vbwwyt6hjrveqmylu42gkovs2ulf9jdm",
+  oaId: "@781junes",   // 官方帳號 ID：還不是好友的人（例如朋友從推薦卡片打開）頁面上會出現「加入好友」
 };
 const IN_LIFF_HOST = location.hostname.endsWith("github.io");
 
@@ -68,7 +69,10 @@ async function post(fields) {
   for (const k of Object.keys(data)) if (ENC_KEYS.has(k) && typeof data[k] === "string") data[k] = safeDecode(data[k]);
   return data;
 }
-let api = { me: () => post({ a: "me" }), apply: f => post({ a: "apply", ...f }), profile: f => post({ a: "profile", ...f }),
+// 推薦連結（liff.line.me/{LIFF}?ref=會員編號）打開時，ref 隨 me 送給 Make 記錄介紹人；同一個分頁只送一次
+const REF = (/^\d{1,7}$/.test(new URLSearchParams(location.search).get("ref") || "") && new URLSearchParams(location.search).get("ref")) || "";
+const refSent = () => { try { return sessionStorage.getItem("ref") === REF; } catch (e) { return false; } };
+let api = { me: () => post(REF && !refSent() ? { a: "me", ref: REF } : { a: "me" }), invite: () => post({ a: "invite" }), apply: f => post({ a: "apply", ...f }), profile: f => post({ a: "profile", ...f }),
   news: () => post({ a: "news" }), courses: () => post({ a: "courses" }), open: id => post({ a: "course_open", id }),
   adminList: () => post({ a: "admin_list" }), adminSet: (id, op) => post({ a: "admin_set", id, op }) };
 
@@ -290,7 +294,9 @@ function renderApply() {
   if (!planOf(f.plan) && S.plans[0]) f.plan = S.plans[0].name;
   const plan = planOf(f.plan);
   const lead = editing ? "修改後重新送出，管理者會看到最新的資料。" : fill(renew ? s["已到期說明"] : s["申請說明"], S.me);
-  $("#app").innerHTML = `${editing ? "" : cover(pic(s["邀請圖網址"], s["邀請圖"], "full"), "邀請加入")}<h1>${editing ? "修改申請" : renew ? "續費" : "申請入會"}</h1>
+  const addFriend = S.notFriend && CONFIG.oaId ? `<div class="notice">先加入官方帳號好友，審核結果和會員選單才收得到。
+    <a class="link" style="margin-top:10px" href="https://line.me/R/ti/p/${encodeURIComponent(CONFIG.oaId)}"><span class="ic">💚</span><span><b>加入好友</b><small>${esc(CONFIG.oaId)}</small></span></a></div>` : "";
+  $("#app").innerHTML = `${addFriend}${editing ? "" : cover(pic(s["邀請圖網址"], s["邀請圖"], "full"), "邀請加入")}<h1>${editing ? "修改申請" : renew ? "續費" : "申請入會"}</h1>
     <p class="lead">${lead}</p>
     <div class="card"><h2>① 選擇方案</h2><div class="plans">${S.plans.map(p => `<label class="plan ${p.name === f.plan ? "on" : ""}">
       <input type="radio" name="plan" value="${esc(p.name)}" ${p.name === f.plan ? "checked" : ""}>
@@ -324,6 +330,8 @@ function renderMember() {
       ${navLink("courses", "📚", "我的課程", "影片與數位產品")}
       ${navLink("ai", "✨", "AI 小幫手", "即將推出")}
     </div>
+    <div class="card"><h2>推薦朋友</h2><p>${esc(s["推薦說明"] || "把學院分享給朋友：朋友從你的卡片加入，我們就會記下是你介紹的。")}</p>
+      <button class="primary" id="invite" style="margin-top:12px" ${S.busy ? "disabled" : ""}>分享推薦卡片</button></div>
     <div class="card"><h2>會籍</h2><dl><dt>方案</dt><dd>${esc(S.me.plan) || "—"}</dd><dt>到期日</dt><dd>${esc(S.me.expiry) || "—"}</dd></dl></div>
     <div class="card"><h2>我的會員資料</h2>${profile()}</div>
     <button class="ghost" id="profileEdit">編輯我的資料</button>`;
@@ -402,6 +410,7 @@ document.addEventListener("click", async e => {
   if (t.id === "prevPage" || t.id === "nextPage") { S.page += t.id === "nextPage" ? 1 : -1; render(); $(".sec").scrollIntoView(); return; }
   if (t.id === "openItem") { openItem(); return; }
   if (t.id === "goLink" && S.reader) { openLink(S.reader.url); return; }
+  if (t.id === "invite" && !S.busy) { invite(); return; }
   if (t.id === "edit") { S.editing = true; render(); return; }
   if (t.id === "cancelEdit") { S.editing = false; render(); return; }
   if (t.id === "profileEdit") { S.profileEdit = true; render(); scrollTo(0, 0); return; }
@@ -433,6 +442,37 @@ document.addEventListener("click", async e => {
     }
   }
 });
+
+// ===== 推薦朋友：一鍵挑 LINE 好友或群組送出卡片（用會員自己的聊天送，不耗官方帳號訊息量）=====
+// 卡片上的連結帶這位會員的「編號」；不在 LINE 裡（或 LINE 版本太舊）就改成複製連結
+async function invite() {
+  S.busy = true; render();
+  try {
+    if (!S.code) S.code = (await api.invite()).code;
+    const url = `https://liff.line.me/${CONFIG.liffId}?ref=${S.code}`;
+    const s = S.site, name = s["學院名稱"] || "學院";
+    if (window.liff && liff.isApiAvailable && liff.isApiAvailable("shareTargetPicker")) {
+      const img = s["邀請圖網址"] ? pic(s["邀請圖網址"], "", "full") : "";
+      const bubble = { type: "bubble",
+        ...(img ? { hero: { type: "image", url: img, size: "full", aspectRatio: "16:9", aspectMode: "cover", action: { type: "uri", uri: url } } } : {}),
+        body: { type: "box", layout: "vertical", spacing: "sm", contents: [
+          { type: "text", text: name, weight: "bold", size: "lg", wrap: true },
+          { type: "text", text: `${S.me.name || S.me.line || "朋友"} 邀請你加入`, size: "sm", color: "#666666", wrap: true }] },
+        footer: { type: "box", layout: "vertical", contents: [
+          { type: "button", style: "primary", color: s["主色"] && /^#[0-9a-fA-F]{6}$/.test(s["主色"]) ? s["主色"] : "#3B5BDB",
+            action: { type: "uri", label: "看看學院", uri: url } }] } };
+      const r = await liff.shareTargetPicker([{ type: "flex", altText: `${S.me.name || S.me.line || "朋友"} 邀請你加入${name}`, contents: bubble }]);
+      if (r && r.status === "success") toast("已分享");
+    } else {
+      try { await navigator.clipboard.writeText(url); toast("已複製推薦連結"); }
+      catch (e) { prompt("複製這個推薦連結，傳給朋友：", url); }
+    }
+  } catch (x) {
+    if (x && x.code === "not_member") toast("會員才能推薦朋友");
+    else if (!handleApiError(x)) toast("分享失敗，請再按一次");
+  }
+  S.busy = false; render();
+}
 
 // ===== LIFF 與錯誤處理（沿用朕宏會員模組的做法） =====
 function handleApiError(e) {
@@ -481,10 +521,13 @@ async function loadMe() {
       .map(p => ({ name: p["名稱"], label: p["標籤"], price: p["價格"], months: p["會籍月數"], desc: p["說明"], order: p["排序"] || 0 }))
       .sort((a, b) => a.order - b.order);
     delete r.site; delete r.plans;
+    // 推薦碼已送出：記下來，網址也拿掉，重新整理不會再記一次
+    if (REF) { try { sessionStorage.setItem("ref", REF); } catch (x) {} params.delete("ref"); history.replaceState(history.state, "", "?" + params); }
     S.me = r;
     for (const [k] of [...FIELDS, ...PAY_FIELDS]) S.form[k] = S.me[k] || "";
     S.form.plan = S.me.plan || "";
     applyBrand(S.site);
+    if (IN_LIFF_HOST && !IS_MEMBER(r.state)) { try { S.notFriend = !(await liff.getFriendship()).friendFlag; } catch (x) {} }
     if (S.site["學院名稱"]) { $("#brand").textContent = S.site["學院名稱"]; document.title = `${S.site["簡稱"] || S.site["學院名稱"]}｜會員專區`; }
     render();
   } catch (e) {

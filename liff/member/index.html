@@ -84,6 +84,7 @@ dt{color:var(--soft)}
 @keyframes wm{0%{left:8%;top:12%}25%{left:62%;top:20%}50%{left:55%;top:72%}75%{left:10%;top:64%}100%{left:8%;top:12%}}
 /* 我的課程：入口（2×2 篩選器）、分區標題、換頁 */
 .entries{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.entries .entry:last-child:nth-child(odd){grid-column:1/-1;aspect-ratio:auto;height:calc((min(100vw, 560px) - 42px) / 2 * 9 / 16)}
 .entry{position:relative;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:var(--brand);color:#fff;text-align:left;border:2px solid transparent}
 .entry img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .entry .en{position:absolute;left:0;right:0;bottom:0;padding:18px 10px 8px;background:linear-gradient(transparent,rgba(0,0,0,.65))}

@@ -23,6 +23,7 @@
       "（內容庫除了「內容連結」「備註」以外的欄位 ID）"
     ],
     "entries_data_source_id": "「🧭 課程入口」的 data source ID（我的課程頁上方的入口）",
+    "referrals_data_source_id": "「🔗 推薦紀錄」的 data source ID（推薦連結每次被點開記一筆）",
     "assistant_rules_data_source_id": "「🤖 小幫手指示」的 data source ID",
     "faq_data_source_id": "「📖 FAQ 知識庫」的 data source ID",
     "assistant_log_data_source_id": "「💬 小幫手對話紀錄」的 data source ID"

@@ -52,6 +52,7 @@ ENTRIES_DS = CFG["notion"].get("entries_data_source_id")       # 🧭 課程入�
 RULES_DS = CFG["notion"].get("assistant_rules_data_source_id")   # 🤖 小幫手指示
 FAQ_DS = CFG["notion"].get("faq_data_source_id")                 # 📖 FAQ 知識庫
 LOG_DS = CFG["notion"].get("assistant_log_data_source_id")       # 💬 小幫手對話紀錄
+REF_DS = CFG["notion"].get("referrals_data_source_id")           # 🔗 推薦紀錄
 # 欄位清單直接寫進網址：Make 的 qs 遇到同名參數只留最後一個（2026-10-23 列表只剩「標籤」一個欄位）
 LIST_QS = "&".join("filter_properties=" + quote(pid, safe="") for pid in CONTENT_LIST_PROPS)
 NOTION_VERSION = "2025-09-03"   # 查詢 data source（/v1/data_sources/…/query）要這個版本
@@ -416,17 +417,57 @@ def build_api():
     me_site_body = body(w_state, me_src, w_extra, site=True)[:-1] + "," + message + "}"
     w_want = want_menu(w_admin, w_ident)
 
+    # ==== 推薦連結：朋友從 liff.line.me/{LIFF}?ref=會員編號 打開，me 會帶 ref 進來（只有這時才多讀 Notion）====
+    # 只有一般會員、高級會員的連結算數；朋友還沒申請（非會員）時，介紹人以最後點的連結為準，
+    # 一申請（審核中以後）就不再改。每次點開都寫一筆「🔗 推薦紀錄」，結果寫明有沒有計入
+    ref_ok = c("{{1.ref}}", "text:pattern", "^[0-9]{1,7}$")
+
+    def referral(fid, ident, counted, label):
+        """fid：朋友的名冊頁面；ident：朋友目前的身分；counted：計入時的結果（新朋友／更新介紹人）"""
+        r = b.notion_api(f"查介紹人（{label}）", f"/v1/data_sources/{DS}/query", "POST",
+                         '{"filter":{"property":"編號","unique_id":{"equals":{{1.ref}}}},"page_size":1}', onerror=[b.ignore()])
+        r["filter"] = flt(f"有推薦碼（{label}）", [[ref_ok]])
+        R = r["id"]
+        rid, ri = f"{{{{{R}.body.results[1].id}}}}", f"{{{{{R}.body.results[1].properties.`身分`.select.name}}}}"
+        not_self = c(rid, "text:notequal", fid)
+
+        def log(result):
+            body = ('{"parent":{"data_source_id":"' + REF_DS + '"},"properties":{'
+                    '"標題":{"title":[{"text":{"content":"#{{1.ref}} 推薦"}}]},'
+                    '"介紹人":{"relation":[{"id":"' + rid + '"}]},"朋友":{"relation":[{"id":"' + fid + '"}]},'
+                    '"點開時間":{"date":{"start":"{{now}}"}},"結果":{"select":{"name":"' + result + '"}}}}')
+            return b.notion_api(f"寫推薦紀錄：{result}（{label}）", "/v1/pages", "POST", body, onerror=[b.ignore()])
+        return [r, b.router(f"推薦算不算（{label}）", [
+            (flt(f"自己的連結（{label}）", [[c(rid, "exist"), c(rid, "text:equal", fid)]]), [log("自己的連結")]),
+            (flt(f"介紹人不是會員（{label}）", [[c(rid, "exist"), not_self, *not_member(ri)]]), [log("介紹人不是會員")]),
+            (flt(f"已申請過，不改介紹人（{label}）", is_member(ri, not_self, c(ident, "text:notequal", "非會員"))), [log("已加入不計")]),
+            (flt(f"計入介紹人（{label}）", is_member(ri, not_self, c(ident, "text:equal", "非會員"))), [
+                b.notion_api(f"寫入介紹人（{label}）", f"/v1/pages/{fid}", "PATCH",
+                             '{"properties":{"介紹人":{"relation":[{"id":"' + rid + '"}]},"介紹時間":{"date":{"start":"{{now}}"}}}}',
+                             onerror=[b.ignore()]),
+                log(counted)]),
+        ])]
+
+    new_guest = b.create("新增非會員（頁面）", [fv("姓名", "title", "（LINE）" + DISPLAY), fv("身分", "select", "非會員"),
+                                              fv("LINE 顯示名稱", "rich_text", DISPLAY), fv("LINE User ID", "rich_text", UID),
+                                              fv("目前選單", "select", "訪客")])
     me_flow = [site_api, site_json, plans_api, plans_json, b.router("我的身分（順便校正選單）", [
         (flt("還沒有名冊", [[none]]), [
-            b.create("新增非會員（頁面）", [fv("姓名", "title", "（LINE）" + DISPLAY), fv("身分", "select", "非會員"),
-                                       fv("LINE 顯示名稱", "rich_text", DISPLAY), fv("LINE User ID", "rich_text", UID),
-                                       fv("目前選單", "select", "訪客")]),
-            respond_json("回傳非會員", body("guest", lambda k: "", {**{k: "" for k in w_extra}, "admin": "N"}, site=True))]),
+            new_guest,
+            respond_json("回傳非會員", body("guest", lambda k: "", {**{k: "" for k in w_extra}, "admin": "N"}, site=True)),
+            *referral(f"{{{{{new_guest['id']}.id}}}}", lit("非會員"), "新朋友", "新朋友")]),
         # 先回應頁面再換選單：換選單出錯也不會讓頁面卡住
         (flt("選單和身分對不上", [[exist, c(w_want, "text:notequal", w_menu)]]), [
-            respond_json("回傳我的身分（校正選單）", me_site_body), apply_menu(b, UID, w_page, w_want, "校正")]),
-        (flt("選單正確", [[exist, c(w_want, "text:equal", w_menu)]]), [respond_json("回傳我的身分", me_site_body)]),
+            respond_json("回傳我的身分（校正選單）", me_site_body), b.router("校正選單、推薦", [
+                (None, [apply_menu(b, UID, w_page, w_want, "校正")]),
+                (None, referral(w_page, w_ident, "更新介紹人", "校正"))])]),
+        (flt("選單正確", [[exist, c(w_want, "text:equal", w_menu)]]), [
+            respond_json("回傳我的身分", me_site_body), *referral(w_page, w_ident, "更新介紹人", "已有名冊")]),
     ])]
+
+    # ==== 我的推薦碼：會員按「推薦朋友」時才讀（名冊的「編號」），非會員不能推薦 ====
+    my_page = b.notion_api("讀我的編號", f"/v1/pages/{w_page}")
+    invite_flow = [my_page, respond_json("回傳推薦碼", '{"ok":true,"code":"{{' + str(my_page["id"]) + '.body.properties.`編號`.unique_id.number}}"}')]
 
     # ==== 申請入會：方案到「方案」表查，名稱、價格以 Notion 為準 ====
     pl = b.notion_api("查申請的方案", f"/v1/data_sources/{PLANS_DS}/query", "POST", plan_query(PLAN_IN),
@@ -554,7 +595,7 @@ def build_api():
     not_admin = [[none], [exist, c(w_admin, "text:notequal", "Y")]]
 
     act = lambda a: c("{{1.a}}", "text:equal", a)
-    PAGE_ACTS = ("me", "apply", "profile", "news", "courses", "course_open", "admin_list", "admin_set")
+    PAGE_ACTS = ("me", "apply", "profile", "news", "courses", "course_open", "admin_list", "admin_set", "invite")
     key_ok = c("{{1.k}}", "text:equal", KEY)
     flow = [
         webhook(MK["api_hook_id"], "會員頁面與核准連結送來的請求"),
@@ -574,6 +615,9 @@ def build_api():
                         (flt("改基本資料", [[act("profile"), c("{{1.name}}", "exist"), c("{{1.phone}}", "exist")]]), profile_flow),
                         (flt("最新消息", [[act("news")]]), news_flow),
                         (flt("課程列表", [[act("courses")]]), courses_flow),
+                        (flt("推薦碼", is_member(w_ident, act("invite"), exist)), invite_flow),
+                        (flt("推薦碼：不是會員", [[act("invite"), none], [act("invite"), exist, *not_member(w_ident)]]), [
+                            respond_json("回傳不能推薦", '{"ok":false,"error":"not_member"}', "403")]),
                         (flt("打開內容", [[act("course_open"), c("{{1.id}}", "exist")]]), open_flow),
                         (flt("管理：名冊", [[act("admin_list"), exist, is_admin]]), admin_list_flow),
                         (flt("管理：動作", [[act("admin_set"), exist, is_admin, c("{{1.id}}", "exist"), c("{{1.op}}", "exist")]]), admin_set_flow),

@@ -44,6 +44,7 @@
                  item("c2", "會員課程", "教學影片", "一般會員", ["我的課程"], null, "#3B5BDB", "2026-10-20"),
                  item("c3", "高級課程", "教學影片", "高級會員", ["我的課程"], null, "", "2026-10-19"),
                  item("c4", "範例電子書", "數位產品", "公開", ["我的課程"], null, "#7048E8", "2026-10-18"),
+                 item("t1", "PDF 整理工具", "AI 工具", "公開", ["我的課程"], null, "", "2026-10-23"),
                  item("n1", "（範例）學院開張", "公告", "公開", ["最新消息"], null, "#0CA678", "2026-10-23"),
                  item("n2", "（範例）會員直播", "公告", "一般會員", ["最新消息"], null, "", "2026-10-21")];
   // 已上傳到雲端硬碟圖床的封面：頁面會加上縮圖參數
@@ -52,7 +53,8 @@
   for (let i = 1; i <= 9; i++) items.push(item("x" + i, "範例課程 " + i, "教學影片", i % 3 ? "一般會員" : "公開", ["我的課程"], null, "", "2026-09-" + String(30 - i).padStart(2, "0")));
   const ms = v => ({ type: "multi_select", multi_select: v.map(name => ({ name })) });
   const entries = [["e1", "免費入門課", "免費看的入門課程", ["公開"], ["教學影片"], "#F59F00"], ["e2", "會員課程", "一般會員的完整課程", ["一般會員"], ["教學影片"], "#3B5BDB"],
-                   ["e3", "高級課程", "高級會員專屬", ["高級會員"], ["教學影片"], "#0CA678"], ["e4", "免費電子書", "可以下載的 PDF", ["公開"], ["數位產品"], "#7048E8"]]
+                   ["e3", "高級課程", "高級會員專屬", ["高級會員"], ["教學影片"], "#0CA678"], ["e4", "免費電子書", "可以下載的 PDF", ["公開"], ["數位產品"], "#7048E8"],
+                   ["e5", "AI 工具", "學院做的 AI 小工具", [], ["AI 工具"], "#E8590C"]]
     .map(([id, name, desc, aud, type, col]) => row(id, { "名稱": { type: "title", title: [{ plain_text: name }] }, "說明": text(desc),
       "開放對象": ms(aud), "類型": ms(type), "圖片": file(pic(name, col)) }));
   const tagged = tag => items.filter(x => x.properties["標籤"].multi_select.some(t => t.name === tag));
@@ -70,6 +72,7 @@
     // c2 模擬 Notion 上傳的影片（頁面內播放），其他模擬外部連結
     async open(id) { await wait(400); return id === "c2" ? { link: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", video: "Y" }
       : id === "c1" ? { link: "https://www.youtube.com/", intro: "（範例導讀）這支影片值得看的三個重點：\n一、……\n二、……\n三、……" } : { link: "https://example.com/" }; },
+    async invite() { await wait(400); if (!["member", "premium"].includes(me.state)) throw Object.assign(new Error("not_member"), { code: "not_member" }); return { ok: true, code: "12" }; },
     async adminList() { await wait(500); if (!admin) throw Object.assign(new Error("not_admin"), { code: "not_admin" }); return { members }; },
     async adminSet() { await wait(500); return { ok: true }; },
   };
