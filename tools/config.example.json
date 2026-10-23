@@ -15,8 +15,7 @@
     "data_source_id": "會員名冊的 data source ID（collection://… 後面那串）",
     "settings_page_id": "「前台設定」那一列的頁面 ID",
     "plans_data_source_id": "「方案」資料庫的 data source ID",
-    "news_data_source_id": "（最新消息的 data source ID）",
-    "content_data_source_id": "（內容庫的 data source ID）",
+    "content_data_source_id": "「內容庫」的 data source ID（最新消息、課程都在這張，用「標籤」分）",
     "content_list_property_ids": [
       "（內容庫除了「內容連結」「備註」以外的欄位 ID）"
     ]

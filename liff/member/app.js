@@ -90,8 +90,7 @@ function render() {
   $("#bar").hidden = true;
   if (!S.me) { $("#app").innerHTML = `<p class="blocked">讀取中…</p>`; return; }
   if (S.view === "about") return renderAbout();
-  if (S.view === "news") return renderNews();
-  if (S.view === "courses") return S.id ? renderCourse() : renderCourses();
+  if (LISTS[S.view]) return S.id ? renderItem(S.view) : renderList(S.view);
   if (S.view === "admin") return renderAdmin();
   if (SOON[S.view]) return renderSoon(SOON[S.view]);
   const st = S.me.state;
@@ -134,39 +133,45 @@ function go(view, id = "") {
   render(); scrollTo(0, 0);
 }
 
-// ===== 最新消息 =====
-function renderNews() {
-  if (!S.news) { $("#app").innerHTML = `<p class="blocked">讀取中…</p>`; need("news", api.news, r => r.news).then(ok => ok && render()); return; }
-  $("#app").innerHTML = `<h1>最新消息</h1>${S.news.length ? S.news.map(n => `<article class="card post">${cover(n["封面"], n["標題"])}
-      <p class="meta">${esc(n["發布日期"])}${n["對象"] === "會員" ? ` · <span class="tag">會員</span>` : ""}</p>
-      <h2>${esc(n["標題"])}</h2><p class="body">${esc(n["內文"])}</p>
-      ${n["連結"] ? `<a class="ghost" href="${esc(n["連結"])}" target="_blank" rel="noopener">看更多 →</a>` : ""}</article>`).join("")
-    : `<p class="blocked">目前沒有消息</p>`}`;
+// ===== 最新消息、課程：同一張 Notion 內容庫，用「標籤」決定出現在哪裡；卡片一律是縮圖、標題、一行簡介 =====
+const LISTS = { news: ["news", api => api.news, r => r.news, "最新消息"], courses: ["items", api => api.courses, r => r.items, ""] };
+function loadList(view) {
+  const [key, call, pick] = LISTS[view];
+  if (S[key]) return S[key];
+  $("#app").innerHTML = `<p class="blocked">讀取中…</p>`;
+  need(key, call(api), pick).then(ok => ok && render());
+  return null;
 }
-
-// ===== 課程與數位產品 =====
-function renderCourses() {
-  if (!S.items) { $("#app").innerHTML = `<p class="blocked">讀取中…</p>`; need("items", api.courses, r => r.items).then(ok => ok && render()); return; }
-  const title = IS_MEMBER(S.me.state) || IS_ADMIN() ? "我的課程" : "課程介紹";
-  $("#app").innerHTML = `<h1>${title}</h1>
-    ${S.items.length ? `<div class="grid">${S.items.map(it => { const ok = canSee(it["開放對象"]); return `<a class="card item" href="?v=courses&id=${it.id}" data-nav="courses" data-id="${it.id}">
-      <div class="cover-wrap">${cover(it["封面"], it["標題"]) || `<div class="cover ph">${esc(it["類型"])}</div>`}${ok ? "" : `<span class="lock">🔒 ${esc(it["開放對象"] === "單獨購買" ? money(it["價格"]) : it["開放對象"] + "專屬")}</span>`}</div>
-      <p class="meta">${esc(it["類型"])}</p><h2>${esc(it["標題"])}</h2><p class="lead">${esc(it["公開摘要"])}</p></a>`; }).join("")}</div>`
-    : `<p class="blocked">${esc(S.site["課程預告"] || "課程準備中")}</p>`}`;
+const thumb = it => cover(it["封面"], it["標題"]) || `<div class="cover ph">${esc(it["類型"])}</div>`;
+const lockText = it => it["開放對象"] === "單獨購買" ? money(it["價格"]) : it["開放對象"] + "專屬";
+function itemCard(it, view) {
+  return `<a class="card item" href="?v=${view}&id=${it.id}" data-nav="${view}" data-id="${it.id}">
+    <div class="cover-wrap">${thumb(it)}${canSee(it["開放對象"]) ? "" : `<span class="lock">🔒 ${esc(lockText(it))}</span>`}</div>
+    <h2>${esc(it["標題"])}</h2><p class="lead">${esc(it["公開摘要"])}</p></a>`;
 }
-function renderCourse() {
-  if (!S.items) { $("#app").innerHTML = `<p class="blocked">讀取中…</p>`; need("items", api.courses, r => r.items).then(ok => ok && render()); return; }
-  const it = S.items.find(x => x.id.replace(/-/g, "") === S.id.replace(/-/g, ""));
-  if (!it) { $("#app").innerHTML = `<div class="blocked"><h2>找不到這個內容</h2></div><div class="links">${navLink("courses", "📚", "回課程列表", "")}</div>`; return; }
+function renderList(view) {
+  const list = loadList(view); if (!list) return;
+  const title = view === "news" ? "最新消息" : IS_MEMBER(S.me.state) || IS_ADMIN() ? "我的課程" : "課程介紹";
+  const empty = view === "news" ? "目前沒有消息" : S.site["課程預告"] || "課程準備中";
+  $("#app").innerHTML = `<h1>${title}</h1>${list.length ? `<div class="grid">${list.map(it => itemCard(it, view)).join("")}</div>`
+    : `<p class="blocked">${esc(empty)}</p>`}`;
+}
+function renderItem(view) {
+  const list = loadList(view); if (!list) return;
+  const back = navLink(view, view === "news" ? "📰" : "📚", view === "news" ? "回最新消息" : "回課程列表", "");
+  const it = list.find(x => x.id.replace(/-/g, "") === S.id.replace(/-/g, ""));
+  if (!it) { $("#app").innerHTML = `<div class="blocked"><h2>找不到這個內容</h2></div><div class="links">${back}</div>`; return; }
   const aud = it["開放對象"], ok = canSee(aud), st = S.me.state;
-  const cta = ok ? `<button class="primary" id="openItem">${it["類型"] === "數位產品" ? "下載" : "開始觀看"}</button>`
+  // 公告只顯示內容，不放按鈕；其他類型依身分給「開始觀看／下載」或解鎖方式
+  const cta = it["類型"] === "公告" && ok ? ""
+    : ok ? `<button class="primary" id="openItem">${it["類型"] === "數位產品" ? "下載" : "開始觀看"}</button>`
     : aud === "單獨購買" ? `<button class="primary" disabled>購買 ${money(it["價格"])}（即將推出）</button>`
     : IS_MEMBER(st) ? `<p class="notice">這是高級會員專屬內容，升級請洽管理者。</p>`
-    : `<a class="primary btn" href="?v=home" data-nav="home">申請加入，解鎖課程</a>`;
-  $("#app").innerHTML = `<div class="detail">${cover(it["封面"], it["標題"]) || `<div class="cover ph">${esc(it["類型"])}</div>`}
-    <p class="meta">${esc(it["類型"])} · ${esc(aud)}</p><h1>${esc(it["標題"])}</h1><p class="lead">${esc(it["公開摘要"])}</p>
+    : `<a class="primary btn" href="?v=home" data-nav="home">申請加入，解鎖內容</a>`;
+  $("#app").innerHTML = `<div class="detail">${thumb(it)}
+    <p class="meta">${esc([it["類型"], aud, it["上架日期"]].filter(Boolean).join(" · "))}</p><h1>${esc(it["標題"])}</h1><p class="lead">${esc(it["公開摘要"])}</p>
     <div class="cta">${cta}${!ok && it["試看連結"] ? `<a class="ghost" href="${esc(it["試看連結"])}" target="_blank" rel="noopener">先試看 →</a>` : ""}</div></div>
-    <div class="links">${navLink("courses", "📚", "回課程列表", "")}</div>`;
+    <div class="links">${back}</div>`;
 }
 async function openItem() {
   if (S.busy) return;

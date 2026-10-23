@@ -3,7 +3,7 @@
 
 - 會員_API.blueprint.json：「{專案}｜會員 API」（欄位 t 是 LINE Access Token）
     a=me 我的身分＋前台設定＋方案＋是否管理者（順便校正選單）｜a=apply 申請入會＋匯款回報｜a=profile 會員自己改基本資料
-    a=news 最新消息（非會員只看公開）｜a=courses 內容庫列表（不含內容連結）｜a=course_open 依身分給內容連結
+    a=news 內容庫標籤「最新消息」｜a=courses 內容庫標籤「課程」（列表都不含內容連結，上鎖的也列出來）｜a=course_open 依身分給內容連結
     a=admin_list 名冊｜a=admin_set 核准、升級高級會員、停權、恢復（只有名冊「角色」勾管理者的人能用）
     頁面上的文字、圖片、方案、收款帳戶都從 Notion「前台設定」「方案」讀，repo 裡不放。
     Notion 核准連結：a=approve 核准入會｜a=sync 依身分套用選單（欄位 k 是密鑰、id 是名冊頁面 ID）
@@ -33,8 +33,7 @@ DS = CFG["notion"]["data_source_id"]
 # 前台設定（一列）與方案：會員頁面上的文字、收款帳戶、價格都從這兩張 Notion 表讀，repo 裡不放
 SETTINGS_PAGE = CFG["notion"]["settings_page_id"]
 PLANS_DS = CFG["notion"]["plans_data_source_id"]
-NEWS_DS = CFG["notion"]["news_data_source_id"]          # 最新消息
-CONTENT_DS = CFG["notion"]["content_data_source_id"]    # 內容庫（課程、數位產品）
+CONTENT_DS = CFG["notion"]["content_data_source_id"]    # 內容庫（最新消息、課程、數位產品都在這裡，用「標籤」分）
 # 內容庫列表回傳的欄位（Notion 欄位 ID）：除了「內容連結」都要，連結只在點開時依身分給
 CONTENT_LIST_PROPS = CFG["notion"]["content_list_property_ids"]
 NOTION_VERSION = "2025-09-03"   # 查詢 data source（/v1/data_sources/…/query）要這個版本
@@ -399,26 +398,16 @@ def build_api():
     ])]
 
     # ==== 最新消息：會員和管理者看全部，其他人只看「公開」 ====
-    news_q = lambda public: ('{"filter":{"and":[{"property":"上架","checkbox":{"equals":true}}'
-                             + (',{"property":"對象","select":{"equals":"公開"}}' if public else "")
-                             + ']},"sorts":[{"property":"發布日期","direction":"descending"}],"page_size":30}')
-
-    def news_route(label, public):
-        api = b.notion_api(f"讀最新消息（{label}）", f"/v1/data_sources/{NEWS_DS}/query", "POST", news_q(public))
-        js = b.to_json(f"最新消息轉 JSON（{label}）", f"{{{{{api['id']}.body.results}}}}")
-        return [api, js, respond_json(f"回傳最新消息（{label}）", f'{{"ok":true,"news":{{{{{js["id"]}.json}}}}}}')]
-    member_or_admin = is_member(w_ident, exist) + [[exist, is_admin]]
-    news_flow = [b.router("最新消息給誰看", [
-        (flt("會員或管理者：全部", member_or_admin), news_route("全部", False)),
-        (flt("其他人：只有公開", [[none], [exist, *not_member(w_ident), c(w_admin, "text:notequal", "Y")]]), news_route("公開", True)),
-    ])]
-
-    # ==== 課程與數位產品：列表不帶「內容連結」，點開時才依身分給連結 ====
-    courses_api = b.notion_api("讀上架的內容", f"/v1/data_sources/{CONTENT_DS}/query", "POST",
-                               '{"filter":{"property":"上架狀態","select":{"equals":"上架"}},"sorts":[{"property":"排序","direction":"ascending"}],"page_size":100}')
-    courses_api["mapper"]["qs"] = [{"key": "filter_properties[]", "value": pid} for pid in CONTENT_LIST_PROPS]
-    courses_json = b.to_json("內容轉 JSON", f"{{{{{courses_api['id']}.body.results}}}}")
-    courses_flow = [courses_api, courses_json, respond_json("回傳內容列表", f'{{"ok":true,"items":{{{{{courses_json["id"]}.json}}}}}}')]
+    # ==== 最新消息、課程：同一張內容庫，用「標籤」決定出現在哪裡；列表不帶「內容連結」，點開時才依身分給連結 ====
+    def list_flow(tag, key, sort):
+        q = ('{"filter":{"and":[{"property":"上架狀態","select":{"equals":"上架"}},{"property":"標籤","multi_select":{"contains":"' + tag
+             + '"}}]},"sorts":[' + sort + '],"page_size":100}')
+        api = b.notion_api(f"讀內容庫（{tag}）", f"/v1/data_sources/{CONTENT_DS}/query", "POST", q)
+        api["mapper"]["qs"] = [{"key": "filter_properties[]", "value": pid} for pid in CONTENT_LIST_PROPS]
+        js = b.to_json(f"{tag}轉 JSON", f"{{{{{api['id']}.body.results}}}}")
+        return [api, js, respond_json(f"回傳{tag}", f'{{"ok":true,"{key}":{{{{{js["id"]}.json}}}}}}')]
+    news_flow = list_flow("最新消息", "news", '{"property":"上架日期","direction":"descending"}')
+    courses_flow = list_flow("課程", "items", '{"property":"排序","direction":"ascending"},{"property":"上架日期","direction":"descending"}')
 
     item = b.notion_api("讀要打開的內容", "/v1/pages/{{1.id}}",
                         onerror=[respond_json("回傳找不到內容", '{"ok":false,"error":"not_found"}', "404"), b.ignore()])
