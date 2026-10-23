@@ -39,6 +39,7 @@ CONN_GEMINI = MK.get("gemini_connection_id")
 ASSIST_DS = MK.get("assistant_datastore_id")
 AS = CFG.get("assistant", {})
 GEMINI_MODEL = AS.get("model", "gemini-flash-latest")
+GEMINI_FALLBACK = AS.get("fallback_model", "gemini-flash-lite-latest")   # 主模型忙線（503）時改用
 KEYWORD, END_WORD = AS.get("keyword", "AI小幫手"), AS.get("end_word", "結束")
 DS = CFG["notion"]["data_source_id"]
 # 前台設定（一列）與方案：會員頁面上的文字、收款帳戶、價格都從這兩張 Notion 表讀，repo 裡不放
@@ -241,12 +242,18 @@ class B:
         return self.line_raw(name, "/v2/bot/message/reply",
                              '{"replyToken":"' + token + '","messages":[{"type":"text","text":' + text_json + '}]}', onerror=[self.ignore()])
 
-    def gemini(self, name, body, onerror=None):
+    def gemini(self, name, body, onerror=None, model=None, fallback=True):
+        """Gemini 忙線（503）時改用備援模型再試一次，成功就當作原本的結果繼續（builtin:Resume）；兩個都失敗才走 onerror"""
         d = {"id": self.nid(), "module": "gemini-ai:makeApiCall", "version": 1, "parameters": {"__IMTCONN__": CONN_GEMINI},
-             "mapper": {"url": f"/v1beta/models/{GEMINI_MODEL}:generateContent", "method": "POST",
+             "mapper": {"url": f"/v1beta/models/{model or GEMINI_MODEL}:generateContent", "method": "POST",
                         "headers": [{"key": "Content-Type", "value": "application/json"}], "qs": [], "body": body},
              "metadata": self.meta(name, [{"name": "__IMTCONN__", "type": "account:gemini-ai-q9zyjp", "label": "Connection", "required": True}])}
-        if onerror:
+        if fallback:
+            fb = self.gemini(name + "（備援模型）", body, onerror=onerror, model=GEMINI_FALLBACK, fallback=False)
+            d["onerror"] = [fb, {"id": self.nid(), "module": "builtin:Resume", "version": 1,
+                                 "mapper": {"body": f"{{{{{fb['id']}.body}}}}", "statusCode": f"{{{{{fb['id']}.statusCode}}}}"},
+                                 "metadata": {"designer": {"x": 1200, "y": self.y}}}]
+        elif onerror:
             d["onerror"] = onerror
         return d
 
