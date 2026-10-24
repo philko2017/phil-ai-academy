@@ -40,17 +40,17 @@
     "類型": sel(type), "開放對象": sel(aud), "價格": { type: "number", number: price }, "公開摘要": text("（一行簡介，太長會被截斷，只顯示一行）"),
     "標籤": { type: "multi_select", multi_select: tags.map(name => ({ name })) }, "上架日期": { type: "date", date: { start: date } },
     "封面": cov ? file(pic(title, cov)) : { type: "files", files: [] } });
-  const items = [item("c1", "免費入門課", "教學影片", "公開", ["我的課程", "最新消息"], null, "#F59F00", "2026-10-22"),
-                 item("c2", "會員課程", "教學影片", "一般會員", ["我的課程"], null, "#3B5BDB", "2026-10-20"),
+  const items = [item("c1", "免費入門課", "教學影片", "公開", ["我的課程", "最新消息", "免費入門課"], null, "#F59F00", "2026-10-22"),
+                 item("c2", "會員課程", "教學影片", "一般會員", ["我的課程", "會員課程"], null, "#3B5BDB", "2026-10-20"),
                  item("c3", "高級課程", "教學影片", "高級會員", ["我的課程"], null, "", "2026-10-19"),
-                 item("c4", "範例電子書", "數位產品", "公開", ["我的課程"], null, "#7048E8", "2026-10-18"),
-                 item("t1", "PDF 整理工具", "AI 工具", "公開", ["我的課程"], null, "", "2026-10-23"),
+                 item("c4", "範例電子書", "數位產品", "公開", ["我的課程", "免費電子書"], null, "#7048E8", "2026-10-18"),
+                 item("t1", "PDF 整理工具", "AI 工具", "一般會員", ["我的課程", "會員 AI 工具"], null, "", "2026-10-23"),
                  item("n1", "（範例）學院開張", "公告", "公開", ["最新消息"], null, "#0CA678", "2026-10-23"),
                  item("n2", "（範例）會員直播", "公告", "一般會員", ["最新消息"], null, "", "2026-10-21")];
   // 已上傳到雲端硬碟圖床的封面：頁面會加上縮圖參數
   items[1].properties["封面網址"] = { type: "url", url: "https://lh3.googleusercontent.com/d/1LzP0MJLjtsQPYwVVYPdtIM71_cb2USPM#sample.png" };
   // 多加幾筆課程看換頁（每頁 10 筆）
-  for (let i = 1; i <= 9; i++) items.push(item("x" + i, "範例課程 " + i, "教學影片", i % 3 ? "一般會員" : "公開", ["我的課程"], null, "", "2026-09-" + String(30 - i).padStart(2, "0")));
+  for (let i = 1; i <= 9; i++) items.push(item("x" + i, "範例課程 " + i, "教學影片", i % 3 ? "一般會員" : "公開", ["我的課程", i % 3 ? "會員課程" : "免費入門課"], null, "", "2026-09-" + String(30 - i).padStart(2, "0")));
   const ms = v => ({ type: "multi_select", multi_select: v.map(name => ({ name })) });
   // 入口底圖用 assets/entries/（tools/make_entry_images.py 產生），正式資料在 Notion「🧭 課程入口」的「圖片」
   const entries = [["e1", "免費入門課", "免費看的入門課程", ["公開"], ["教學影片"], "free"], ["e4", "免費電子書", "可以下載的 PDF", ["公開"], ["數位產品"], "ebook"],

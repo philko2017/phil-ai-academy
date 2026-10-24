@@ -150,7 +150,7 @@ function go(view, id = "", replace = false) {
 }
 
 // ===== 最新消息、課程：同一張 Notion 內容庫，用「標籤」決定出現在哪裡；卡片一律是縮圖、標題、一行簡介 =====
-// 課程列表跟「🧭 課程入口」一起回來，入口另外存在 S.entries
+// 課程列表跟「🧭 課程入口」一起回來，入口另外存在 S.entries；哪個內容在哪個入口，看內容的「標籤」
 const LISTS = { news: ["news", api => api.news, r => r.news, "最新消息"],
                 courses: ["items", api => api.courses, r => { S.entries = nrows(r.entries); return r.items; }, ""] };
 const PAGE_SIZE = 10;
@@ -191,11 +191,8 @@ function renderList(view) {
     ${pages > 1 ? `<div class="pager"><button id="prevPage" ${S.page ? "" : "disabled"}>‹ 上一頁</button>
       <span>${S.page + 1} / ${pages}</span><button id="nextPage" ${S.page < pages - 1 ? "" : "disabled"}>下一頁 ›</button></div>` : ""}`;
 }
-// 入口的篩選條件：開放對象、類型都是多選，沒勾就不限
-function inEntry(it, e) {
-  const aud = e["開放對象"] || [], types = e["類型"] || [];
-  return (!aud.length || aud.includes(it["開放對象"])) && (!types.length || types.includes(it["類型"]));
-}
+// 入口的篩選：內容庫的「標籤」有勾這個入口的名稱（例如「會員 AI 工具」）就列在這個入口；跟「最新消息」「我的課程」同一套標籤
+const inEntry = (it, e) => (it["標籤"] || []).includes(e["名稱"]);
 // 內容頁主按鈕：依「類型」換字，沒列到的是影片類
 const OPEN_LABEL = { 數位產品: "下載", "AI 工具": "開啟工具", 文章: "閱讀" };
 function renderItem(view) {
