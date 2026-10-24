@@ -107,7 +107,7 @@ def people_gear(d, cx, cy, s, col):
 
 
 # 上排三張選單都一樣（所有人看到同一個「我的課程」頁，靠權限區分能不能進去）
-TOP = {"member": [("最新消息", "公告與活動", news), ("我的課程", "影片與數位產品", play), ("AI 小幫手", "有問題就問", sparkle)]}
+TOP = {"member": [("最新消息", "公告與活動", news), ("我的課程", "課程・電子書・AI 工具", play), ("AI 小幫手", "有問題就問", sparkle)]}
 TOP["guest"] = TOP["admin"] = TOP["member"]
 BOTTOM = {
     "guest": ("申請加入", "選擇方案、完成匯款，送出申請", person_plus),
