@@ -76,7 +76,7 @@ const refSent = () => { try { return sessionStorage.getItem("ref") === REF; } ca
 let api = { me: () => post(REF && !refSent() ? { a: "me", ref: REF } : { a: "me" }), invite: () => post({ a: "invite" }), apply: f => post({ a: "apply", ...f }), profile: f => post({ a: "profile", ...f }),
   news: () => post({ a: "news" }), courses: () => post({ a: "courses" }), open: id => post({ a: "course_open", id }),
   adminList: () => post({ a: "admin_list" }), adminSet: (id, op) => post({ a: "admin_set", id, op }),
-  adminMenu: on => post({ a: "admin_menu", op: on ? "on" : "off" }) };
+  adminView: ident => post({ a: "admin_view", op: ident || "off" }) };
 
 // ===== 狀態與畫面 =====
 const params = new URLSearchParams(location.search);
@@ -86,10 +86,18 @@ const VIEWS = ["home", "about", "news", "courses", "admin", "ai"];
 const V = params.get("v");
 const S = { view: VIEWS.includes(V) ? V : "home", id: params.get("id") || "", me: null, site: {}, plans: [], form: {},
             busy: false, editing: false, profileEdit: false, news: null, items: null, members: null, q: "", sel: "" };
-const IS_ADMIN = () => S.me && S.me.admin === "Y";
+// REAL_ADMIN：真的是管理者（能進管理頁、切換身分檢視）；IS_ADMIN：畫面上當管理者看待（用預覽身分檢視時不算，才看得到那個身分真正的畫面與權限）
+const REAL_ADMIN = () => S.me && S.me.admin === "Y";
+const IS_ADMIN = () => REAL_ADMIN() && !S.me.preview;
 const planOf = name => S.plans.find(p => p.name === name);
 
+// 管理者用其他身分檢視時，每一頁最上面都有提示條和「結束檢視」
 function render() {
+  renderView();
+  if (S.me && S.me.preview && REAL_ADMIN()) $("#app").insertAdjacentHTML("afterbegin",
+    `<div class="notice preview">👁 正在以「${esc(S.me.preview)}」檢視<button class="chip" id="endView" ${S.busy ? "disabled" : ""}>結束檢視</button></div>`);
+}
+function renderView() {
   const b = S.me && BADGE[S.me.state];
   $("#badge").className = b ? "badge " + b[0] : "";
   $("#badge").textContent = b ? b[1] : "";
@@ -255,7 +263,7 @@ const isAdminRow = x => (x["角色"] || []).includes("管理者");
 const opsFor = x => [...(OPS[x["身分"]] || []),
   ...(isAdminRow(x) ? [["admin_remove", "取消管理者"]] : x["身分"] === "停權" ? [] : [["admin_add", "設為管理者"]])];
 function renderAdmin() {
-  if (!IS_ADMIN()) { $("#app").innerHTML = `<div class="blocked"><h2>只有管理者可以使用</h2></div>`; return; }
+  if (!REAL_ADMIN()) { $("#app").innerHTML = `<div class="blocked"><h2>只有管理者可以使用</h2></div>`; return; }
   if (!S.members) { $("#app").innerHTML = loading("讀取名冊中"); need("members", api.adminList, r => r.members).then(ok => ok && render()); return; }
   const m = S.members;
   const count = id => m.filter(x => x["身分"] === id).length;
@@ -265,7 +273,7 @@ function renderAdmin() {
     <label class="f search"><input id="q" type="search" placeholder="搜尋姓名、電話、Email、LINE 名稱" value="${esc(S.q)}"></label>
     <div class="rows" id="rows">${adminRows()}</div>
     ${inviteCard()}
-    ${menuTestCard()}
+    ${viewAsCard()}
     <div class="links">${navLink("home", "🪪", "回會員專區", "")}</div>`;
   // 打字時只換名冊，不重畫搜尋框，中文輸入法選字才不會被打斷
   $("#q").oninput = e => { S.q = e.target.value; $("#rows").innerHTML = adminRows(); };
@@ -346,7 +354,6 @@ function renderMember() {
       ${navLink("ai", "✨", "AI 小幫手", "在 LINE 聊天室提問")}
     </div>
     ${inviteCard()}
-    ${IS_ADMIN() ? menuTestCard() : ""}
     <div class="card"><h2>會籍</h2><dl><dt>方案</dt><dd>${esc(S.me.plan) || "—"}</dd><dt>到期日</dt><dd>${esc(S.me.expiry) || "—"}</dd></dl></div>
     <div class="card"><h2>我的會員資料</h2>${profile()}</div>
     <button class="ghost" id="profileEdit">編輯我的資料</button>`;
@@ -354,12 +361,20 @@ function renderMember() {
 // 推薦朋友：一鍵挑 LINE 好友或群組送出推薦卡片（會員專區、管理會員共用）
 const inviteCard = () => `<div class="card"><h2>推薦朋友</h2><p>${esc(S.site["推薦說明"] || "把學院分享給朋友：朋友從你的卡片加入，我們就會記下是你介紹的。")}</p>
   <button class="primary" id="invite" style="margin-top:12px" ${S.busy ? "disabled" : ""}>分享推薦卡片</button></div>`;
-// 管理者測試會員選單：暫時把自己的 LINE 選單換成自己身分（一般會員）的版本，測完從會員專區或管理會員切回
-function menuTestCard() {
-  const on = S.me.menutest === "Y";
-  return `<div class="card"><h2>測試會員選單</h2>
-    <p>${on ? "你的 LINE 選單現在是會員版（測試中）。測完按下面切回管理者選單。" : "把你的 LINE 選單暫時換成一般會員看到的版本，方便測試會員畫面；管理功能不受影響。"}</p>
-    <button class="${on ? "primary" : "ghost"}" id="menuTest" style="margin-top:12px" ${S.busy ? "disabled" : ""}>${on ? "切回管理者選單" : "切換成會員選單"}</button></div>`;
+// 管理者切換身分檢視：選一種身分，頁面、內容權限、LINE 選單都換成那個身分看到的樣子；不會改到真正的身分，申請和改資料在檢視中不能送出
+function viewAsCard() {
+  return `<div class="card"><h2>切換身分檢視</h2>
+    <p>用其他身分看看頁面和 LINE 選單，測試權限是否正確。檢視中每一頁最上面都有「結束檢視」。</p>
+    <div class="views">${IDENTS.map(i => `<button class="chip${S.me.preview === i ? " on" : ""}" data-view="${i}" ${S.busy ? "disabled" : ""}>${i}</button>`).join("")}</div></div>`;
+}
+async function viewAs(ident) {
+  S.busy = true; render();
+  try {
+    await api.adminView(ident);
+    toast(ident ? `已切換成「${ident}」，LINE 選單也換了` : "已結束檢視，換回管理者");
+    S.busy = false; S.members = null; S.items = null; S.news = null;
+    await loadMe(); go("home", "", true);
+  } catch (x) { S.busy = false; if (!handleApiError(x)) toast("切換失敗，請再按一次"); render(); }
 }
 function renderProfileEdit() {
   $("#app").innerHTML = `<h1>編輯我的資料</h1>
@@ -443,13 +458,9 @@ document.addEventListener("click", async e => {
   if (t.id === "openItem") { openItem(); return; }
   if (t.id === "goLink" && S.reader) { openLink(S.reader.url); return; }
   if (t.id === "invite" && !S.busy) { invite(); return; }
-  if (t.id === "menuTest" && !S.busy) {
-    const on = S.me.menutest !== "Y";
-    S.busy = true; render();
-    try { await api.adminMenu(on); S.me.menutest = on ? "Y" : "N"; toast(on ? "已換成會員選單，回聊天室看看" : "已換回管理者選單"); }
-    catch (x) { if (!handleApiError(x)) toast("切換失敗，請再按一次"); }
-    S.busy = false; render(); return;
-  }
+  const va = e.target.closest("[data-view]");
+  if (va && !S.busy) { viewAs(va.dataset.view); return; }
+  if (t.id === "endView" && !S.busy) { viewAs(""); return; }
   if (t.id === "edit") { S.editing = true; render(); return; }
   if (t.id === "cancelEdit") { S.editing = false; render(); return; }
   if (t.id === "profileEdit") { S.profileEdit = true; render(); scrollTo(0, 0); return; }
@@ -460,7 +471,7 @@ document.addEventListener("click", async e => {
     if (!checkBasic(f)) return;
     S.busy = true; render();
     try { await api.profile(f); Object.assign(S.me, f); S.busy = false; S.profileEdit = false; toast("已儲存"); render(); scrollTo(0, 0); }
-    catch (x) { S.busy = false; if (!handleApiError(x)) { toast("儲存失敗，請再按一次"); render(); } }
+    catch (x) { S.busy = false; if (!handleApiError(x)) { toast(x.code === "preview" ? "切換身分檢視中，不能儲存" : "儲存失敗，請再按一次"); render(); } }
     return;
   }
   if (t.id === "send" && !S.busy) {
@@ -479,6 +490,7 @@ document.addEventListener("click", async e => {
     catch (x) {
       S.busy = false;
       if (x.code === "bad_plan") { toast("這個方案已經下架，請重新整理頁面"); render(); }
+      else if (x.code === "preview") { toast("切換身分檢視中，不能送出（不會改到你的資料）"); render(); }
       else if (!handleApiError(x)) { toast("送出失敗，請再按一次"); render(); }
     }
   }

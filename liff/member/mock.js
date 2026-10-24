@@ -27,6 +27,8 @@
              message: st === "premium" ? "（管理者寫給這位會員的話）" : "" };
   // ?admin=1：以管理者身分預覽（看得到管理會員）
   const admin = new URLSearchParams(location.search).get("admin") === "1";
+  let preview = "";
+  const STATES = { 非會員: "guest", 審核中: "pending", 一般會員: "member", 高級會員: "premium", 已到期: "expired", 停權: "banned" };
   // 圖片用 SVG 色塊代替，正式圖片在 Notion
   const pic = (label, color) => "data:image/svg+xml," + encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="${color}"/>` +
@@ -63,7 +65,7 @@
   const members = [person("m1", "王小明", "審核中"), person("m2", "陳大文", "一般會員"), person("m3", "林美美", "高級會員"),
                    person("m4", "張三", "已到期"), person("m5", "李四", "停權"), person("m6", "管理者", "一般會員", "管理者")];
   window.MOCK_API = {
-    async me() { await wait(400); return { ...me, admin: admin ? "Y" : "N", menutest: "N", site, plans }; },
+    async me() { await wait(400); return { ...me, ...(preview ? { state: STATES[preview] } : {}), admin: admin ? "Y" : "N", preview, site, plans }; },
     async apply(f) { await wait(700); me = { ...me, ...f, state: ["guest", "expired"].includes(me.state) ? "pending" : me.state }; return { ...me }; },
     async profile(f) { await wait(500); me = { ...me, ...f }; return { ok: true }; },
     async news() { await wait(400); return { news: tagged("最新消息") }; },
@@ -74,6 +76,7 @@
     async invite() { await wait(400); if (!admin && !["member", "premium"].includes(me.state)) throw Object.assign(new Error("not_member"), { code: "not_member" }); return { ok: true, code: "12" }; },
     async adminList() { await wait(500); if (!admin) throw Object.assign(new Error("not_admin"), { code: "not_admin" }); return { members }; },
     async adminSet() { await wait(500); return { ok: true }; },
-    async adminMenu(on) { await wait(500); if (!admin) throw Object.assign(new Error("not_admin"), { code: "not_admin" }); return { ok: true, menutest: on ? "Y" : "N" }; },
+    // 管理者切換身分檢視：之後的 me 用預覽的身分回傳
+    async adminView(ident) { await wait(500); if (!admin) throw Object.assign(new Error("not_admin"), { code: "not_admin" }); preview = ident; return { ok: true, preview: ident }; },
   };
 })();
