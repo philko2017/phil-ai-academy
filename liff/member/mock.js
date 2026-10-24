@@ -53,9 +53,8 @@
   for (let i = 1; i <= 9; i++) items.push(item("x" + i, "範例課程 " + i, "教學影片", i % 3 ? "一般會員" : "公開", ["我的課程"], null, "", "2026-09-" + String(30 - i).padStart(2, "0")));
   const ms = v => ({ type: "multi_select", multi_select: v.map(name => ({ name })) });
   // 入口底圖用 assets/entries/（tools/make_entry_images.py 產生），正式資料在 Notion「🧭 課程入口」的「圖片」
-  const entries = [["e1", "免費入門課", "免費看的入門課程", ["公開"], ["教學影片"], "free"], ["e2", "會員課程", "一般會員的完整課程", ["一般會員"], ["教學影片"], "member"],
-                   ["e3", "高級課程", "高級會員專屬", ["高級會員"], ["教學影片"], "premium"], ["e4", "免費電子書", "可以下載的 PDF", ["公開"], ["數位產品"], "ebook"],
-                   ["e5", "AI 工具", "學院做的 AI 小工具", [], ["AI 工具"], "tools"]]
+  const entries = [["e1", "免費入門課", "免費看的入門課程", ["公開"], ["教學影片"], "free"], ["e4", "免費電子書", "可以下載的 PDF", ["公開"], ["數位產品"], "ebook"],
+                   ["e2", "會員課程", "一般會員的完整課程", ["一般會員"], ["教學影片"], "member"], ["e5", "會員 AI 工具", "會員專屬的 AI 小工具", [], ["AI 工具"], "tools"]]
     .map(([id, name, desc, aud, type, img]) => row(id, { "名稱": { type: "title", title: [{ plain_text: name }] }, "說明": text(desc),
       "開放對象": ms(aud), "類型": ms(type), "圖片": file(`../../assets/entries/${img}.jpg`) }));
   const tagged = tag => items.filter(x => x.properties["標籤"].multi_select.some(t => t.name === tag));
