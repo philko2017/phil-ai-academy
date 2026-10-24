@@ -85,11 +85,12 @@ dt{color:var(--soft)}
 /* 我的課程：入口（2×2 篩選器）、分區標題、換頁 */
 .entries{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .entries .entry:last-child:nth-child(odd){grid-column:1/-1;aspect-ratio:auto;height:calc((min(100vw, 560px) - 42px) / 2 * 9 / 16)}
-.entry{position:relative;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:var(--brand);color:#fff;text-align:left;border:2px solid transparent}
+.entries .entry:last-child:nth-child(odd) img{object-position:50% 30%}
+.entry{position:relative;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#1B1640;color:#fff;text-align:left;border:2px solid transparent}
 .entry img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.entry .en{position:absolute;left:0;right:0;bottom:0;padding:18px 10px 8px;background:linear-gradient(transparent,rgba(0,0,0,.65))}
-.entry b{display:block;font-size:15px}
-.entry small{display:block;font-size:11px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.entry .en{position:absolute;left:0;right:0;bottom:0;padding:22px 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.55));text-shadow:0 1px 6px rgba(0,0,0,.45)}
+.entry b{display:block;font-size:20px;line-height:1.25;letter-spacing:.5px}
+.entry small{display:block;font-size:13px;opacity:.9;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .entry.on{border-color:var(--accent)}
 .sec{display:flex;align-items:center;justify-content:space-between;margin:22px 0 10px}
 .sec h2{font-size:17px}
@@ -110,7 +111,6 @@ dt{color:var(--soft)}
 .post h2{margin-top:2px}
 .body{white-space:pre-line;color:var(--soft)}
 .grid{display:grid;gap:14px;margin-top:6px}
-@media (min-width:520px){.grid{grid-template-columns:1fr 1fr}}
 .grid .card{margin-top:0}
 .item{display:block;text-decoration:none;color:inherit;padding:0;overflow:hidden}
 .item .cover,.item .cover-wrap .cover{border-radius:0}
@@ -151,6 +151,6 @@ dt{color:var(--soft)}
 <div class="bar" id="bar" hidden><div class="in" id="barIn"></div></div>
 <script src="https://static.line-scdn.net/liff/edge/versions/2.31.2/sdk.js"></script>
 <!-- 改版時換 v（日期-版次），手機才不會用到快取的舊版 -->
-<script src="app.js?v=20261024-2"></script>
+<script src="app.js?v=20261024-3"></script>
 </body>
 </html>
