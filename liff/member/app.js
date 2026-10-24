@@ -463,16 +463,20 @@ async function invite() {
     const url = `https://liff.line.me/${CONFIG.liffId}?ref=${S.code}`;
     const s = S.site, name = s["學院名稱"] || "學院";
     if (window.liff && liff.isApiAvailable && liff.isApiAvailable("shareTargetPicker")) {
+      // 卡片文字在 Notion「前台設定」：推薦卡片說明（{姓名} 換成介紹人）、推薦按鈕文字；大圖用雲端硬碟圖床的「邀請圖網址」
+      // （Notion 原圖網址一小時後失效，傳出去的卡片會破圖，所以不用）
+      const who = S.me.name || S.me.line || "朋友";
+      const desc = String(s["推薦卡片說明"] || "{姓名} 邀請你加入{學院}").replace(/\{姓名\}/g, who).replace(/\{學院\}/g, name);
+      const color = /^#[0-9a-fA-F]{6}$/.test(String(s["主色"] || "").trim()) ? s["主色"].trim() : "#3B5BDB";
       const img = s["邀請圖網址"] ? pic(s["邀請圖網址"], "", "full") : "";
-      const bubble = { type: "bubble",
+      const bubble = { type: "bubble", size: "mega",
         ...(img ? { hero: { type: "image", url: img, size: "full", aspectRatio: "16:9", aspectMode: "cover", action: { type: "uri", uri: url } } } : {}),
-        body: { type: "box", layout: "vertical", spacing: "sm", contents: [
-          { type: "text", text: name, weight: "bold", size: "lg", wrap: true },
-          { type: "text", text: `${S.me.name || S.me.line || "朋友"} 邀請你加入`, size: "sm", color: "#666666", wrap: true }] },
-        footer: { type: "box", layout: "vertical", contents: [
-          { type: "button", style: "primary", color: s["主色"] && /^#[0-9a-fA-F]{6}$/.test(s["主色"]) ? s["主色"] : "#3B5BDB",
-            action: { type: "uri", label: "看看學院", uri: url } }] } };
-      const r = await liff.shareTargetPicker([{ type: "flex", altText: `${S.me.name || S.me.line || "朋友"} 邀請你加入${name}`, contents: bubble }]);
+        body: { type: "box", layout: "vertical", spacing: "md", paddingAll: "20px", contents: [
+          { type: "text", text: name, weight: "bold", size: "xl", wrap: true },
+          { type: "text", text: desc, size: "sm", color: "#555555", wrap: true }] },
+        footer: { type: "box", layout: "vertical", paddingAll: "16px", paddingTop: "0px", contents: [
+          { type: "button", style: "primary", height: "md", color, action: { type: "uri", label: String(s["推薦按鈕文字"] || "看看學院").slice(0, 40), uri: url } }] } };
+      const r = await liff.shareTargetPicker([{ type: "flex", altText: desc.slice(0, 400), contents: bubble }]);
       if (r && r.status === "success") toast("已分享");
     } else {
       try { await navigator.clipboard.writeText(url); toast("已複製推薦連結"); }
