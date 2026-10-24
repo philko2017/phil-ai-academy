@@ -576,8 +576,11 @@ def build_api():
     ok_body = lambda s: f'{{"ok":true,"state":"{s}"}}'
     t_pl, t_expiry = plan_expiry(b, sp(T, "方案", ".name"), "管理會員", [respond_json("回傳讀不到方案（管理）", '{"ok":false,"error":"bad_plan"}', "500"), b.ignore()])
     i = t_ident[2:-2]
+    a = t_admin[2:-2]
+    # 設為管理者：還不是管理者、沒有停權；取消管理者：本來是管理者，而且不能取消自己（避免最後一位管理者把自己移掉）
     op_ok = ('{{if(1.op = "approve"; if(' + i + ' = "審核中"; "Y"; "N"); if(1.op = "premium"; if(' + i + ' = "一般會員"; "Y"; "N"); if(1.op = "ban"; if('
-             + i + ' = "停權"; "N"; "Y"); if(1.op = "restore"; if(' + i + ' = "停權"; "Y"; "N"); "N"))))}}')
+             + i + ' = "停權"; "N"; "Y"); if(1.op = "restore"; if(' + i + ' = "停權"; "Y"; "N"); if(1.op = "admin_add"; if(' + a + ' = "Y"; "N"; if('
+             + i + ' = "停權"; "N"; "Y")); if(1.op = "admin_remove"; if(' + a + ' = "Y"; if(' + str(T) + '.id = ' + str(W) + '.id; "N"; "Y"); "N"); "N"))))))}}')
     admin_set_flow = [b.router("檢查會員編號", [
         (flt("會員編號格式正確", [[c("{{1.id}}", "text:pattern", "^[0-9a-fA-F-]{32,36}$")]]), [t, b.router("管理動作", [
             (flt("核准（審核中）", [[op("approve"), c(op_ok, "text:equal", "Y")]]), [
@@ -592,6 +595,14 @@ def build_api():
             (flt("恢復（停權 → 一般會員）", [[op("restore"), c(op_ok, "text:equal", "Y")]]), [
                 b.update("管理：恢復一般會員", t_page, [fv("身分", "select", "一般會員")]),
                 respond_json("回傳已恢復", ok_body("member")), apply_menu(b, t_uid, t_page, want_menu(menu_admin(T), lit("一般會員")), "管理恢復")]),
+            (flt("設為管理者", [[op("admin_add"), c(op_ok, "text:equal", "Y")]]), [
+                b.notion_api("管理：設為管理者", f"/v1/pages/{t_page}", "PATCH", '{"properties":{"角色":{"multi_select":[{"name":"管理者"}]}}}'),
+                respond_json("回傳已設為管理者", '{"ok":true,"admin":"Y"}'),
+                apply_menu(b, t_uid, t_page, want_menu(lit("Y"), t_ident), "設為管理者")]),
+            (flt("取消管理者", [[op("admin_remove"), c(op_ok, "text:equal", "Y")]]), [
+                b.notion_api("管理：取消管理者", f"/v1/pages/{t_page}", "PATCH", '{"properties":{"角色":{"multi_select":[]}}}'),
+                respond_json("回傳已取消管理者", '{"ok":true,"admin":"N"}'),
+                apply_menu(b, t_uid, t_page, want_menu(lit("N"), t_ident), "取消管理者")]),
             (flt("這個動作不適用", [[c(op_ok, "text:notequal", "Y")]]), [
                 respond_json("回傳不適用", '{"ok":false,"error":"not_allowed"}', "409")]),
         ])]),

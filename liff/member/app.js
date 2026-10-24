@@ -250,6 +250,10 @@ const IDENTS = ["非會員", "審核中", "一般會員", "高級會員", "已�
 const OPS = { 審核中: [["approve", "核准入會"]], 一般會員: [["premium", "升級高級會員"], ["ban", "停權"]],
               高級會員: [["ban", "停權"]], 已到期: [["ban", "停權"]], 停權: [["restore", "恢復為一般會員"]], 非會員: [["ban", "停權"]] };
 const OP_DONE = { approve: "一般會員", premium: "高級會員", ban: "停權", restore: "一般會員" };
+// 管理者可以把別人設為管理者、取消管理者（不能取消自己，Make 也會擋）；停權的人不能設為管理者
+const isAdminRow = x => (x["角色"] || []).includes("管理者");
+const opsFor = x => [...(OPS[x["身分"]] || []),
+  ...(isAdminRow(x) ? [["admin_remove", "取消管理者"]] : x["身分"] === "停權" ? [] : [["admin_add", "設為管理者"]])];
 function renderAdmin() {
   if (!IS_ADMIN()) { $("#app").innerHTML = `<div class="blocked"><h2>只有管理者可以使用</h2></div>`; return; }
   if (!S.members) { $("#app").innerHTML = loading("讀取名冊中"); need("members", api.adminList, r => r.members).then(ok => ok && render()); return; }
@@ -282,14 +286,19 @@ function adminDetail(x) {
                 ["末五碼", x["匯款末五碼"]], ["匯款日期", x["匯款日期"]], ["申請", (x["申請時間"] || "").slice(0, 10)], ["到期日", x["到期日"]],
                 ["好友狀態", x["好友狀態"]], ["備註", x["備註"]]].filter(([, v]) => v);
   return `<dl class="info">${info.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-    <div class="ops">${(OPS[x["身分"]] || []).map(([op, label]) => `<button class="op ${op}" data-op="${op}" data-id="${x.id}">${label}</button>`).join("")}</div>`;
+    <div class="ops">${opsFor(x).map(([op, label]) => `<button class="op ${op}" data-op="${op}" data-id="${x.id}">${label}</button>`).join("")}</div>`;
 }
 async function adminOp(id, op) {
   const x = S.members.find(m => m.id === id);
-  const label = (OPS[x["身分"]] || []).find(o => o[0] === op)[1];
+  const label = opsFor(x).find(o => o[0] === op)[1];
   if (!confirm(`${label}：${x["姓名"]}？`)) return;
-  try { await api.adminSet(id, op); x["身分"] = OP_DONE[op]; toast(`已${label}`); render(); }
-  catch (e) { if (!handleApiError(e)) toast(e.code === "not_allowed" ? "這個身分不能做這個動作，請重新整理" : "操作失敗，請再試一次"); }
+  try {
+    await api.adminSet(id, op);
+    if (op === "admin_add") x["角色"] = ["管理者"]; else if (op === "admin_remove") x["角色"] = []; else x["身分"] = OP_DONE[op];
+    toast(`已${label}`); render();
+  } catch (e) {
+    if (!handleApiError(e)) toast(e.code === "not_allowed" ? (op === "admin_remove" ? "不能取消自己的管理者身分" : "這個身分不能做這個動作，請重新整理") : "操作失敗，請再試一次");
+  }
 }
 const input = (k, label, req, type, f) => `<label class="f">${label}${req ? " <b>*</b>" : ""}${type === "area"
   ? `<textarea data-k="${k}">${esc(f[k])}</textarea>`
