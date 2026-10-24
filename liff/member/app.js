@@ -1,5 +1,6 @@
 // ===== 設定：LIFF ID 與 API 網址。正式網址（GitHub Pages）一律用真資料；本機預覽才載入 mock.js 的模擬資料 =====
-// 會員通（LINE Member Kit）的會員頁面。送到 Make 情境「{專案}｜會員 API」，用欄位 a 分辨動作：me 我的身分（順便校正選單）｜apply 申請入會｜profile 改基本資料
+// 會員通（LINE Member Kit）的會員頁面。送到 Make 情境「{專案}｜會員 API」，用欄位 a 分辨動作（見下方 api）：
+// me 我的身分（順便校正選單、記推薦）｜apply 申請入會｜profile 改基本資料｜news、courses、course_open 內容｜invite 推薦碼｜admin_list、admin_set 管理會員
 // 頁面上的文字、方案、收款帳戶都不放在這裡：Make 從 Notion「前台設定」「方案」讀出來，隨 me 一起回傳
 const CONFIG = {
   liffId: "2012161136-mSmbv0VR",
@@ -78,9 +79,9 @@ let api = { me: () => post(REF && !refSent() ? { a: "me", ref: REF } : { a: "me"
 
 // ===== 狀態與畫面 =====
 const params = new URLSearchParams(location.search);
-// 還在規劃的功能先顯示「即將推出」；說明文字在 Notion「前台設定」
-const SOON = { ai: ["✨", "AI 小幫手", "AI 小幫手預告"] };
-const VIEWS = ["home", "about", "news", "courses", "admin", ...Object.keys(SOON)];
+// AI 小幫手在 LINE 聊天室裡用（Make「LINE 事件」情境），這頁只說明怎麼叫出來；關鍵字和結束詞跟 tools/config.local.json 的 assistant 一致
+const AI_HELP = { keyword: "AI小幫手", end: "結束" };
+const VIEWS = ["home", "about", "news", "courses", "admin", "ai"];
 const V = params.get("v");
 const S = { view: VIEWS.includes(V) ? V : "home", id: params.get("id") || "", me: null, site: {}, plans: [], form: {},
             busy: false, editing: false, profileEdit: false, news: null, items: null, members: null, q: "", sel: "" };
@@ -96,7 +97,7 @@ function render() {
   if (S.view === "about") return renderAbout();
   if (LISTS[S.view]) return S.id ? renderItem(S.view) : renderList(S.view);
   if (S.view === "admin") return renderAdmin();
-  if (SOON[S.view]) return renderSoon(SOON[S.view]);
+  if (S.view === "ai") return renderAiHelp();
   const st = S.me.state;
   if (S.profileEdit) return renderProfileEdit();
   if (IS_MEMBER(st)) return renderMember();
@@ -110,9 +111,10 @@ function renderAbout() {
     <div class="card"><p>${esc(s["學院介紹"])}</p>${s["聯絡方式"] ? `<p class="lead" style="margin-top:10px">${esc(s["聯絡方式"])}</p>` : ""}</div>
     <div class="links"><a class="link" href="?v=home"><span class="ic">📝</span><span><b>會員專區</b><small>申請入會、查看會員資料</small></span></a></div>`;
 }
-function renderSoon([icon, title, key]) {
-  $("#app").innerHTML = `<div class="status"><div class="big">${icon}</div><h2>${title}</h2><p class="lead">${esc(S.site[key])}</p>
-    <p class="lead" style="margin-top:14px;font-weight:700;color:var(--brand)">即將推出</p></div>
+function renderAiHelp() {
+  $("#app").innerHTML = `<div class="status"><div class="big">✨</div><h2>AI 小幫手</h2>
+    <p class="lead">回到 LINE 聊天室，按下方選單「AI 小幫手」（或輸入「${AI_HELP.keyword}」）就能開始提問。</p>
+    <p class="lead" style="margin-top:10px">輸入「${AI_HELP.end}」結束對話，一段時間沒說話也會自動結束。${IS_MEMBER(S.me.state) ? "" : "AI 小幫手限會員使用。"}</p></div>
     <div class="links">${navLink("home", "🪪", "會員專區", "入會申請、我的會員資料")}</div>`;
 }
 // 等待中：文字後面三個點輪流跳動（動畫在 index.html 的 .dots）
@@ -194,9 +196,11 @@ function inEntry(it, e) {
   const aud = e["開放對象"] || [], types = e["類型"] || [];
   return (!aud.length || aud.includes(it["開放對象"])) && (!types.length || types.includes(it["類型"]));
 }
+// 內容頁主按鈕：依「類型」換字，沒列到的是影片類
+const OPEN_LABEL = { 數位產品: "下載", "AI 工具": "開啟工具", 文章: "閱讀" };
 function renderItem(view) {
   const list = loadList(view); if (!list) return;
-  const back = navLink(view, view === "news" ? "📰" : "📚", view === "news" ? "回最新消息" : "回課程列表", "");
+  const back = navLink(view, view === "news" ? "📰" : "📚", view === "news" ? "回最新消息" : "回我的課程", "");
   const it = list.find(x => x.id.replace(/-/g, "") === S.id.replace(/-/g, ""));
   if (!it) { $("#app").innerHTML = `<div class="blocked"><h2>找不到這個內容</h2></div><div class="links">${back}</div>`; return; }
   const aud = it["開放對象"], ok = canSee(aud), st = S.me.state;
@@ -206,7 +210,7 @@ function renderItem(view) {
   const cta = playing ? ""
     : reading ? `<button class="primary" id="goLink">前往觀看</button>`
     : it["類型"] === "公告" && ok ? ""
-    : ok ? `<button class="primary" id="openItem">${it["類型"] === "數位產品" ? "下載" : "開始觀看"}</button>`
+    : ok ? `<button class="primary" id="openItem">${OPEN_LABEL[it["類型"]] || "開始觀看"}</button>`
     : aud === "單獨購買" ? `<button class="primary" disabled>購買 ${money(it["價格"])}（即將推出）</button>`
     : IS_MEMBER(st) ? `<p class="notice">這是高級會員專屬內容，升級請洽管理者。</p>`
     : `<a class="primary btn" href="?v=home" data-nav="home">申請加入，解鎖內容</a>`;
@@ -327,8 +331,8 @@ function renderMember() {
     <div class="links">
       ${IS_ADMIN() ? navLink("admin", "🛠", "管理會員", "核准、升級、停權、恢復") : ""}
       ${navLink("news", "📰", "最新消息", "公告與活動")}
-      ${navLink("courses", "📚", "我的課程", "影片與數位產品")}
-      ${navLink("ai", "✨", "AI 小幫手", "即將推出")}
+      ${navLink("courses", "📚", "我的課程", "課程、電子書與 AI 工具")}
+      ${navLink("ai", "✨", "AI 小幫手", "在 LINE 聊天室提問")}
     </div>
     <div class="card"><h2>推薦朋友</h2><p>${esc(s["推薦說明"] || "把學院分享給朋友：朋友從你的卡片加入，我們就會記下是你介紹的。")}</p>
       <button class="primary" id="invite" style="margin-top:12px" ${S.busy ? "disabled" : ""}>分享推薦卡片</button></div>
@@ -378,8 +382,13 @@ function checkBasic(f) {
 }
 
 // ===== 操作 =====
-document.addEventListener("input", e => { if (e.target.dataset.k) S.form[e.target.dataset.k] = e.target.value; });
-document.addEventListener("change", e => { if (e.target.name === "plan") { S.form.plan = e.target.value; render(); } });
+const keep = e => { if (e.target.dataset && e.target.dataset.k) S.form[e.target.dataset.k] = e.target.value; };
+document.addEventListener("input", keep);
+document.addEventListener("compositionend", keep);
+document.addEventListener("focusout", keep);
+// 送出前直接讀畫面上的欄位：注音、拼音還沒選字就按送出時，最後一個字只在欄位裡、還沒進 S.form
+const syncForm = () => document.querySelectorAll("[data-k]").forEach(el => { S.form[el.dataset.k] = el.value; });
+document.addEventListener("change", e => { if (e.target.name === "plan") { syncForm(); S.form.plan = e.target.value; render(); } });
 // 左上角「‹」：先離開編輯狀態；有上一頁就回上一頁；直接從選單打開的話，內容頁回列表、其他回會員專區，會員專區再按就關閉
 function goBack() {
   if (S.profileEdit) { S.profileEdit = false; for (const [k] of FIELDS) S.form[k] = S.me[k] || ""; render(); return; }
@@ -416,6 +425,7 @@ document.addEventListener("click", async e => {
   if (t.id === "profileEdit") { S.profileEdit = true; render(); scrollTo(0, 0); return; }
   if (t.id === "cancelProfile") { S.profileEdit = false; for (const [k] of FIELDS) S.form[k] = S.me[k] || ""; render(); return; }
   if (t.id === "saveProfile" && !S.busy) {
+    syncForm();
     const f = {};
     if (!checkBasic(f)) return;
     S.busy = true; render();
@@ -424,6 +434,7 @@ document.addEventListener("click", async e => {
     return;
   }
   if (t.id === "send" && !S.busy) {
+    syncForm();
     const f = { plan: S.form.plan || "" };
     if (!planOf(f.plan)) { toast("請選擇方案"); return; }
     for (const [k, label, req] of PAY_FIELDS) {

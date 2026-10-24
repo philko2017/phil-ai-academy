@@ -509,7 +509,6 @@ def build_api():
             respond_json("回傳不能改", '{"ok":false,"error":"not_allowed"}', "403")]),
     ])]
 
-    # ==== 最新消息：會員和管理者看全部，其他人只看「公開」 ====
     # ==== 最新消息、課程：同一張內容庫，用「標籤」決定出現在哪裡；列表不帶「內容連結」，點開時才依身分給連結 ====
     def list_flow(tag, key, sort, entries=False):
         q = ('{"filter":{"and":[{"property":"上架狀態","select":{"equals":"上架"}},{"property":"標籤","multi_select":{"contains":"' + tag

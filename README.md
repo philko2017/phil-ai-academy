@@ -34,14 +34,14 @@ LINE 官方帳號「Phil 的 AI 學院」的會員申請、匯款回報與選單
 
 ## 部署
 
-1. 在 Make 建好 Notion、LINE 兩個連線和兩個 webhook（會員 API 用一般 webhook，LINE 事件用 LINE 的 Watch Events）。
+1. 在 Make 建好 Notion、LINE、Gemini（AI 小幫手）、Google 雲端硬碟（圖床）四個連線，和兩個 webhook（會員 API 用一般 webhook，LINE 事件用 LINE 的 Watch Events）。
 2. 複製 `tools/config.example.json` 成 `tools/config.local.json`，填入編號和核准密鑰。
 3. `python3 tools/make_blueprints.py` 產生 `make/` 裡的藍圖，到 Make 匯入（藍圖含連線編號，不用逐一重選）。
-4. 把 `liff/member/app.js` 開頭 `CONFIG` 的 `liffId`、`apiUrl` 換成實際的值，推上 GitHub。
+4. 把 `liff/member/app.js` 開頭 `CONFIG` 的 `liffId`、`apiUrl`、`oaId` 換成實際的值，推上 GitHub。之後每次改版，`liff/member/index.html` 引用的 `app.js?v=` 換一個版次（日期-版次），手機才不會用到快取的舊版。
 5. LIFF app 的 Endpoint URL 填 `https://philko2017.github.io/phil-ai-academy/liff/member/`。
 6. 在 Notion 會員名冊加「核准按鈕」「套用身分按鈕」兩個公式欄位（連結帶密鑰，呼叫會員 API 的 `a=approve`、`a=sync`）。
 
-Make 免費方案最多兩個啟用中的情境：會員 API、LINE 事件保持開啟；建立圖文選單平常關閉，要用時手動「執行一次」。
+情境共四個：會員 API、LINE 事件是自動執行（排程「立即」）；建立圖文選單、圖片上傳到雲端硬碟是手動執行（排程 On demand、保持開啟，要用時按「執行一次」）。Make 免費方案只能開兩個情境，這套至少要 Core 方案。每次匯入藍圖後排程會被重設成每 15 分鐘，要改回來。
 
 ## 本機預覽
 
