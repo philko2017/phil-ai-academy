@@ -256,7 +256,8 @@ function renderAdmin() {
   const m = S.members;
   const count = id => m.filter(x => x["身分"] === id).length;
   $("#app").innerHTML = `<h1>管理會員</h1>
-    <div class="stats"><div class="stat total"><b>${m.length}</b><small>全部</small></div>${IDENTS.map(i => `<div class="stat${i === "審核中" && count(i) ? " hot" : ""}"><b>${count(i)}</b><small>${i}</small></div>`).join("")}</div>
+    <div class="stats"><button class="stat total${S.ident ? "" : " on"}" data-ident=""><b>${m.length}</b><small>全部</small></button>${IDENTS.map(i => `<button class="stat${i === "審核中" && count(i) ? " hot" : ""}${S.ident === i ? " on" : ""}" data-ident="${i}"><b>${count(i)}</b><small>${i}</small></button>`).join("")}</div>
+    <p class="lead" id="identNote" style="margin-top:8px">${S.ident ? `只看「${esc(S.ident)}」${count(S.ident)} 位，再點一次或點「全部」看所有人` : "點上面的數字，只看那一種身分的人"}</p>
     <label class="f search"><input id="q" type="search" placeholder="搜尋姓名、電話、Email、LINE 名稱" value="${esc(S.q)}"></label>
     <div class="rows" id="rows">${adminRows()}</div>
     ${inviteCard()}
@@ -265,14 +266,15 @@ function renderAdmin() {
   // 打字時只換名冊，不重畫搜尋框，中文輸入法選字才不會被打斷
   $("#q").oninput = e => { S.q = e.target.value; $("#rows").innerHTML = adminRows(); };
 }
+// 名冊：上方統計格子可點（S.ident＝只看某一種身分），再加搜尋；審核中的人排最前面
 function adminRows() {
   const q = S.q.trim().toLowerCase();
   const hit = x => !q || ["姓名", "電話", "Email", "LINE 顯示名稱"].some(k => String(x[k] || "").toLowerCase().includes(q));
   const order = x => (x["身分"] === "審核中" ? 0 : 1);
-  return S.members.filter(hit).sort((a, b) => order(a) - order(b)).map(x => `<div class="row${x.id === S.sel ? " open" : ""}" data-sel="${x.id}">
+  return S.members.filter(x => !S.ident || x["身分"] === S.ident).filter(hit).sort((a, b) => order(a) - order(b)).map(x => `<div class="row${x.id === S.sel ? " open" : ""}" data-sel="${x.id}">
       <div class="row-head"><b>${esc(x["姓名"])}</b><span class="badge ${badgeOf(x["身分"])}">${esc(x["身分"])}</span>${(x["角色"] || []).includes("管理者") ? `<span class="tag">管理者</span>` : ""}</div>
       <small>${esc([x["電話"], x["方案"], x["到期日"] && "到期 " + x["到期日"]].filter(Boolean).join(" · "))}</small>
-      ${x.id === S.sel ? adminDetail(x) : ""}</div>`).join("") || `<p class="blocked">找不到符合的人</p>`;
+      ${x.id === S.sel ? adminDetail(x) : ""}</div>`).join("") || `<p class="blocked">${S.ident && !q ? `目前沒有「${esc(S.ident)}」的人` : "找不到符合的人"}</p>`;
 }
 const badgeOf = id => ({ 非會員: "guest", 審核中: "pending", 一般會員: "member", 高級會員: "premium", 已到期: "expired", 停權: "banned" }[id] || "guest");
 function adminDetail(x) {
@@ -418,6 +420,8 @@ document.addEventListener("click", async e => {
   // 頁面內切換畫面：不重新整理，省下重新讀身分的 Make 點數
   const nav = e.target.closest("[data-nav]");
   if (nav) { e.preventDefault(); go(nav.dataset.nav, nav.dataset.id || ""); return; }
+  const idt = e.target.closest("[data-ident]");
+  if (idt) { S.ident = S.ident === idt.dataset.ident ? "" : idt.dataset.ident; S.sel = ""; render(); $("#rows").scrollIntoView({ behavior: "smooth", block: "nearest" }); return; }
   const op = e.target.closest("[data-op]");
   if (op) { adminOp(op.dataset.id, op.dataset.op); return; }
   const row = e.target.closest("[data-sel]");
