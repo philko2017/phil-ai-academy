@@ -75,7 +75,8 @@ const REF = (/^\d{1,7}$/.test(new URLSearchParams(location.search).get("ref") ||
 const refSent = () => { try { return sessionStorage.getItem("ref") === REF; } catch (e) { return false; } };
 let api = { me: () => post(REF && !refSent() ? { a: "me", ref: REF } : { a: "me" }), invite: () => post({ a: "invite" }), apply: f => post({ a: "apply", ...f }), profile: f => post({ a: "profile", ...f }),
   news: () => post({ a: "news" }), courses: () => post({ a: "courses" }), open: id => post({ a: "course_open", id }),
-  adminList: () => post({ a: "admin_list" }), adminSet: (id, op) => post({ a: "admin_set", id, op }) };
+  adminList: () => post({ a: "admin_list" }), adminSet: (id, op) => post({ a: "admin_set", id, op }),
+  adminMenu: on => post({ a: "admin_menu", op: on ? "on" : "off" }) };
 
 // ===== 狀態與畫面 =====
 const params = new URLSearchParams(location.search);
@@ -258,6 +259,8 @@ function renderAdmin() {
     <div class="stats"><div class="stat total"><b>${m.length}</b><small>全部</small></div>${IDENTS.map(i => `<div class="stat${i === "審核中" && count(i) ? " hot" : ""}"><b>${count(i)}</b><small>${i}</small></div>`).join("")}</div>
     <label class="f search"><input id="q" type="search" placeholder="搜尋姓名、電話、Email、LINE 名稱" value="${esc(S.q)}"></label>
     <div class="rows" id="rows">${adminRows()}</div>
+    ${inviteCard()}
+    ${menuTestCard()}
     <div class="links">${navLink("home", "🪪", "回會員專區", "")}</div>`;
   // 打字時只換名冊，不重畫搜尋框，中文輸入法選字才不會被打斷
   $("#q").oninput = e => { S.q = e.target.value; $("#rows").innerHTML = adminRows(); };
@@ -331,11 +334,21 @@ function renderMember() {
       ${navLink("courses", "📚", "我的課程", "課程、電子書與 AI 工具")}
       ${navLink("ai", "✨", "AI 小幫手", "在 LINE 聊天室提問")}
     </div>
-    <div class="card"><h2>推薦朋友</h2><p>${esc(s["推薦說明"] || "把學院分享給朋友：朋友從你的卡片加入，我們就會記下是你介紹的。")}</p>
-      <button class="primary" id="invite" style="margin-top:12px" ${S.busy ? "disabled" : ""}>分享推薦卡片</button></div>
+    ${inviteCard()}
+    ${IS_ADMIN() ? menuTestCard() : ""}
     <div class="card"><h2>會籍</h2><dl><dt>方案</dt><dd>${esc(S.me.plan) || "—"}</dd><dt>到期日</dt><dd>${esc(S.me.expiry) || "—"}</dd></dl></div>
     <div class="card"><h2>我的會員資料</h2>${profile()}</div>
     <button class="ghost" id="profileEdit">編輯我的資料</button>`;
+}
+// 推薦朋友：一鍵挑 LINE 好友或群組送出推薦卡片（會員專區、管理會員共用）
+const inviteCard = () => `<div class="card"><h2>推薦朋友</h2><p>${esc(S.site["推薦說明"] || "把學院分享給朋友：朋友從你的卡片加入，我們就會記下是你介紹的。")}</p>
+  <button class="primary" id="invite" style="margin-top:12px" ${S.busy ? "disabled" : ""}>分享推薦卡片</button></div>`;
+// 管理者測試會員選單：暫時把自己的 LINE 選單換成自己身分（一般會員）的版本，測完從會員專區或管理會員切回
+function menuTestCard() {
+  const on = S.me.menutest === "Y";
+  return `<div class="card"><h2>測試會員選單</h2>
+    <p>${on ? "你的 LINE 選單現在是會員版（測試中）。測完按下面切回管理者選單。" : "把你的 LINE 選單暫時換成一般會員看到的版本，方便測試會員畫面；管理功能不受影響。"}</p>
+    <button class="${on ? "primary" : "ghost"}" id="menuTest" style="margin-top:12px" ${S.busy ? "disabled" : ""}>${on ? "切回管理者選單" : "切換成會員選單"}</button></div>`;
 }
 function renderProfileEdit() {
   $("#app").innerHTML = `<h1>編輯我的資料</h1>
@@ -417,6 +430,13 @@ document.addEventListener("click", async e => {
   if (t.id === "openItem") { openItem(); return; }
   if (t.id === "goLink" && S.reader) { openLink(S.reader.url); return; }
   if (t.id === "invite" && !S.busy) { invite(); return; }
+  if (t.id === "menuTest" && !S.busy) {
+    const on = S.me.menutest !== "Y";
+    S.busy = true; render();
+    try { await api.adminMenu(on); S.me.menutest = on ? "Y" : "N"; toast(on ? "已換成會員選單，回聊天室看看" : "已換回管理者選單"); }
+    catch (x) { if (!handleApiError(x)) toast("切換失敗，請再按一次"); }
+    S.busy = false; render(); return;
+  }
   if (t.id === "edit") { S.editing = true; render(); return; }
   if (t.id === "cancelEdit") { S.editing = false; render(); return; }
   if (t.id === "profileEdit") { S.profileEdit = true; render(); scrollTo(0, 0); return; }

@@ -51,12 +51,11 @@
   items[1].properties["封面網址"] = { type: "url", url: "https://lh3.googleusercontent.com/d/1LzP0MJLjtsQPYwVVYPdtIM71_cb2USPM#sample.png" };
   // 多加幾筆課程看換頁（每頁 10 筆）
   for (let i = 1; i <= 9; i++) items.push(item("x" + i, "範例課程 " + i, "教學影片", i % 3 ? "一般會員" : "公開", ["我的課程", i % 3 ? "會員課程" : "免費入門課"], null, "", "2026-09-" + String(30 - i).padStart(2, "0")));
-  const ms = v => ({ type: "multi_select", multi_select: v.map(name => ({ name })) });
   // 入口底圖用 assets/entries/（tools/make_entry_images.py 產生），正式資料在 Notion「🧭 課程入口」的「圖片」
-  const entries = [["e1", "免費入門課", "免費看的入門課程", ["公開"], ["教學影片"], "free"], ["e4", "免費電子書", "可以下載的 PDF", ["公開"], ["數位產品"], "ebook"],
-                   ["e2", "會員課程", "一般會員的完整課程", ["一般會員"], ["教學影片"], "member"], ["e5", "會員 AI 工具", "會員專屬的 AI 小工具", [], ["AI 工具"], "tools"]]
-    .map(([id, name, desc, aud, type, img]) => row(id, { "名稱": { type: "title", title: [{ plain_text: name }] }, "說明": text(desc),
-      "開放對象": ms(aud), "類型": ms(type), "圖片": file(`../../assets/entries/${img}.jpg`) }));
+  const entries = [["e1", "免費入門課", "免費看的入門課程", "free"], ["e4", "免費電子書", "可以下載的 PDF", "ebook"],
+                   ["e2", "會員課程", "一般會員的完整課程", "member"], ["e5", "會員 AI 工具", "會員專屬的 AI 小工具", "tools"]]
+    .map(([id, name, desc, img]) => row(id, { "名稱": { type: "title", title: [{ plain_text: name }] }, "說明": text(desc),
+      "圖片": file(`../../assets/entries/${img}.jpg`) }));
   const tagged = tag => items.filter(x => x.properties["標籤"].multi_select.some(t => t.name === tag));
   const person = (id, name, ident, role) => row(id, { "姓名": { type: "title", title: [{ plain_text: name }] }, "身分": sel(ident),
     "電話": { type: "phone_number", phone_number: "0900-000-000" }, "方案": sel("方案 A"), "角色": { type: "multi_select", multi_select: role ? [{ name: role }] : [] },
@@ -64,7 +63,7 @@
   const members = [person("m1", "王小明", "審核中"), person("m2", "陳大文", "一般會員"), person("m3", "林美美", "高級會員"),
                    person("m4", "張三", "已到期"), person("m5", "李四", "停權"), person("m6", "管理者", "一般會員", "管理者")];
   window.MOCK_API = {
-    async me() { await wait(400); return { ...me, admin: admin ? "Y" : "N", site, plans }; },
+    async me() { await wait(400); return { ...me, admin: admin ? "Y" : "N", menutest: "N", site, plans }; },
     async apply(f) { await wait(700); me = { ...me, ...f, state: ["guest", "expired"].includes(me.state) ? "pending" : me.state }; return { ...me }; },
     async profile(f) { await wait(500); me = { ...me, ...f }; return { ok: true }; },
     async news() { await wait(400); return { news: tagged("最新消息") }; },
@@ -72,8 +71,9 @@
     // c2 模擬 Notion 上傳的影片（頁面內播放），其他模擬外部連結
     async open(id) { await wait(400); return id === "c2" ? { link: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", video: "Y" }
       : id === "c1" ? { link: "https://www.youtube.com/", intro: "（範例導讀）這支影片值得看的三個重點：\n一、……\n二、……\n三、……" } : { link: "https://example.com/" }; },
-    async invite() { await wait(400); if (!["member", "premium"].includes(me.state)) throw Object.assign(new Error("not_member"), { code: "not_member" }); return { ok: true, code: "12" }; },
+    async invite() { await wait(400); if (!admin && !["member", "premium"].includes(me.state)) throw Object.assign(new Error("not_member"), { code: "not_member" }); return { ok: true, code: "12" }; },
     async adminList() { await wait(500); if (!admin) throw Object.assign(new Error("not_admin"), { code: "not_admin" }); return { members }; },
     async adminSet() { await wait(500); return { ok: true }; },
+    async adminMenu(on) { await wait(500); if (!admin) throw Object.assign(new Error("not_admin"), { code: "not_admin" }); return { ok: true, menutest: on ? "Y" : "N" }; },
   };
 })();

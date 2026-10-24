@@ -306,6 +306,12 @@ def admin_of(mod):
     return "{{if(contains(map(" + f"{mod}.properties_value.`角色`" + '; "name"); "管理者"); "Y"; "N")}}'
 
 
+def menu_admin(mod):
+    """換選單用的管理者判斷：名冊勾了「會員選單測試」的管理者暫時當一般人，看到自己身分的選單（管理者測試會員選單用）；
+    能不能進管理頁面仍看 admin_of"""
+    return ("{{if(" + f"{mod}.properties_value.`會員選單測試`" + '; "N"; ' + admin_of(mod)[2:-2] + ")}}")
+
+
 def want_menu(admin, ident):
     """這個人應該看到的選單：管理者 → 管理者；一般會員、高級會員 → 會員；其他 → 訪客"""
     i = ident[2:-2]
@@ -364,14 +370,14 @@ def build_api():
                     pl,
                     b.update("改成一般會員", page, [fv("身分", "select", "一般會員"), now("核准時間"), date("到期日", expiry)]),
                     b.respond("回傳已核准", html(f"✅ 已核准 {name}", f"身分已改成一般會員（{plan}，到期日 {expiry}），LINE 選單正在更新。"), "200", True),
-                    apply_menu(b, uid, page, want_menu(admin, lit("一般會員")), "核准連結")]),
+                    apply_menu(b, uid, page, want_menu(menu_admin(G), lit("一般會員")), "核准連結")]),
                 (flt("不是審核中", [[c(ident, "text:notequal", "審核中"), c(uid, "exist")]]), [
                     b.respond("回傳不需核准", html("ℹ️ 不需要核准", f"{name} 目前的身分是「{ident}」。"), "200", True)]),
                 no_line])]
         return [g, b.router("可否套用", [
             (flt("有 LINE 帳號", [[c(uid, "exist")]]), [
                 b.respond("回傳已套用", html(f"✅ {name}：選單更新中", f"身分是「{ident}」，LINE 選單會換成對應的版本。"), "200", True),
-                apply_menu(b, uid, page, want_menu(admin, ident), "套用身分連結")]),
+                apply_menu(b, uid, page, want_menu(menu_admin(G), ident), "套用身分連結")]),
             no_line])]
 
     # ==== LIFF：先驗證 Access Token（屬於本系統的 LINE Login channel）再取得使用者編號 ====
@@ -408,14 +414,15 @@ def build_api():
         return "{" + ",".join(parts) + "}"
     from_w = lambda k: sp(W, dict((a, n) for a, n, *_ in APPLY_FIELDS)[k], "" if k in ("phone", "email") else "[].plain_text")
     w_extra = {"plan": sp(W, "方案", ".name"), "pay5": sp(W, "匯款末五碼", "[].plain_text"),
-               "paydate": sp(W, "匯款日期", ".start"), "expiry": sp(W, "到期日", ".start"), "admin": w_admin}
+               "paydate": sp(W, "匯款日期", ".start"), "expiry": sp(W, "到期日", ".start"), "admin": w_admin,
+               "menutest": "{{if(" + f"{W}.properties_value.`會員選單測試`; \"Y\"; \"N\")}}"}
     w_state = STATE % w_ident[2:-2]
     # 非會員的姓名是「（LINE）顯示名稱」，不是本名，不回給頁面；「給會員的話」由管理者在名冊填
     me_src = lambda k: ('{{if(' + w_ident[2:-2] + ' = "非會員"; ""; ' + from_w(k)[2:-2] + ')}}') if k == "name" else from_w(k)
     me_body = body(w_state, me_src, w_extra)
     message = '"message":"' + enc(sp(W, "給會員的話", "[].plain_text")) + '"'
     me_site_body = body(w_state, me_src, w_extra, site=True)[:-1] + "," + message + "}"
-    w_want = want_menu(w_admin, w_ident)
+    w_want = want_menu(menu_admin(W), w_ident)
 
     # ==== 推薦連結：朋友從 liff.line.me/{LIFF}?ref=會員編號 打開，me 會帶 ref 進來（只有這時才多讀 Notion）====
     # 只有一般會員、高級會員的連結算數；朋友還沒申請（非會員）時，介紹人以最後點的連結為準，
@@ -575,16 +582,16 @@ def build_api():
         (flt("會員編號格式正確", [[c("{{1.id}}", "text:pattern", "^[0-9a-fA-F-]{32,36}$")]]), [t, b.router("管理動作", [
             (flt("核准（審核中）", [[op("approve"), c(op_ok, "text:equal", "Y")]]), [
                 t_pl, b.update("管理：改成一般會員", t_page, [fv("身分", "select", "一般會員"), now("核准時間"), date("到期日", t_expiry)]),
-                respond_json("回傳已核准（管理）", ok_body("member")), apply_menu(b, t_uid, t_page, want_menu(t_admin, lit("一般會員")), "管理核准")]),
+                respond_json("回傳已核准（管理）", ok_body("member")), apply_menu(b, t_uid, t_page, want_menu(menu_admin(T), lit("一般會員")), "管理核准")]),
             (flt("升級高級會員", [[op("premium"), c(op_ok, "text:equal", "Y")]]), [
                 b.update("管理：改成高級會員", t_page, [fv("身分", "select", "高級會員")]),
-                respond_json("回傳已升級", ok_body("premium")), apply_menu(b, t_uid, t_page, want_menu(t_admin, lit("高級會員")), "管理升級")]),
+                respond_json("回傳已升級", ok_body("premium")), apply_menu(b, t_uid, t_page, want_menu(menu_admin(T), lit("高級會員")), "管理升級")]),
             (flt("停權", [[op("ban"), c(op_ok, "text:equal", "Y")]]), [
                 b.update("管理：停權", t_page, [fv("身分", "select", "停權")]),
-                respond_json("回傳已停權", ok_body("banned")), apply_menu(b, t_uid, t_page, want_menu(t_admin, lit("停權")), "管理停權")]),
+                respond_json("回傳已停權", ok_body("banned")), apply_menu(b, t_uid, t_page, want_menu(menu_admin(T), lit("停權")), "管理停權")]),
             (flt("恢復（停權 → 一般會員）", [[op("restore"), c(op_ok, "text:equal", "Y")]]), [
                 b.update("管理：恢復一般會員", t_page, [fv("身分", "select", "一般會員")]),
-                respond_json("回傳已恢復", ok_body("member")), apply_menu(b, t_uid, t_page, want_menu(t_admin, lit("一般會員")), "管理恢復")]),
+                respond_json("回傳已恢復", ok_body("member")), apply_menu(b, t_uid, t_page, want_menu(menu_admin(T), lit("一般會員")), "管理恢復")]),
             (flt("這個動作不適用", [[c(op_ok, "text:notequal", "Y")]]), [
                 respond_json("回傳不適用", '{"ok":false,"error":"not_allowed"}', "409")]),
         ])]),
@@ -593,8 +600,21 @@ def build_api():
     ])]
     not_admin = [[none], [exist, c(w_admin, "text:notequal", "Y")]]
 
+    # ==== 管理者測試會員選單：名冊勾「會員選單測試」後換成自己身分的選單（一般會員 → 會員選單），取消就換回管理者選單 ====
+    # 測試期間打開頁面也不會被「校正選單」換回去（want_menu 用 menu_admin 判斷）
+    def menu_test(on):
+        label = "開始測試會員選單" if on else "結束測試會員選單"
+        return [b.notion_api(f"名冊：{label}", f"/v1/pages/{w_page}", "PATCH",
+                             '{"properties":{"會員選單測試":{"checkbox":' + ("true" if on else "false") + '}}}'),
+                respond_json(f"回傳{label}", '{"ok":true,"menutest":"' + ("Y" if on else "N") + '"}'),
+                apply_menu(b, UID, w_page, want_menu(lit("N" if on else "Y"), w_ident), label)]
+    admin_menu_flow = [b.router("測試會員選單", [
+        (flt("開始測試", [[op("on")]]), menu_test(True)),
+        (flt("結束測試", [[op("off")]]), menu_test(False)),
+    ])]
+
     act = lambda a: c("{{1.a}}", "text:equal", a)
-    PAGE_ACTS = ("me", "apply", "profile", "news", "courses", "course_open", "admin_list", "admin_set", "invite")
+    PAGE_ACTS = ("me", "apply", "profile", "news", "courses", "course_open", "admin_list", "admin_set", "admin_menu", "invite")
     key_ok = c("{{1.k}}", "text:equal", KEY)
     flow = [
         webhook(MK["api_hook_id"], "會員頁面與核准連結送來的請求"),
@@ -614,13 +634,14 @@ def build_api():
                         (flt("改基本資料", [[act("profile"), c("{{1.name}}", "exist"), c("{{1.phone}}", "exist")]]), profile_flow),
                         (flt("最新消息", [[act("news")]]), news_flow),
                         (flt("課程列表", [[act("courses")]]), courses_flow),
-                        (flt("推薦碼", is_member(w_ident, act("invite"), exist)), invite_flow),
-                        (flt("推薦碼：不是會員", [[act("invite"), none], [act("invite"), exist, *not_member(w_ident)]]), [
+                        (flt("推薦碼", is_member(w_ident, act("invite"), exist) + [[act("invite"), exist, is_admin]]), invite_flow),
+                        (flt("推薦碼：不是會員", [[act("invite"), none], [act("invite"), exist, *not_member(w_ident), c(w_admin, "text:notequal", "Y")]]), [
                             respond_json("回傳不能推薦", '{"ok":false,"error":"not_member"}', "403")]),
                         (flt("打開內容", [[act("course_open"), c("{{1.id}}", "exist")]]), open_flow),
                         (flt("管理：名冊", [[act("admin_list"), exist, is_admin]]), admin_list_flow),
                         (flt("管理：動作", [[act("admin_set"), exist, is_admin, c("{{1.id}}", "exist"), c("{{1.op}}", "exist")]]), admin_set_flow),
-                        (flt("管理：不是管理者", [[act("admin_list"), *g] for g in not_admin] + [[act("admin_set"), *g] for g in not_admin]), [
+                        (flt("管理：測試會員選單", [[act("admin_menu"), exist, is_admin, c("{{1.op}}", "exist")]]), admin_menu_flow),
+                        (flt("管理：不是管理者", [[act(a), *g] for a in ("admin_list", "admin_set", "admin_menu") for g in not_admin]), [
                             respond_json("回傳不是管理者", '{"ok":false,"error":"not_admin"}', "403")]),
                     ])]),
                 ])]),
@@ -798,7 +819,7 @@ def build_events():
         # 封鎖時 LINE 會拿掉個人選單，解除封鎖後只剩訪客選單，所以依名冊的身分重新套用
         (flt("重新加好友", [[c(typ, "text:equal", "follow"), exist]]), [
             b.update("改回好友中", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "好友中")]),
-            apply_menu(b, uid, f"{{{{{W}.id}}}}", want_menu(admin_of(W), sp(W, "身分", ".name")), "重新加好友")]),
+            apply_menu(b, uid, f"{{{{{W}.id}}}}", want_menu(menu_admin(W), sp(W, "身分", ".name")), "重新加好友")]),
         (flt("封鎖", [[c(typ, "text:equal", "unfollow"), exist]]), [
             b.update("標記已封鎖", f"{{{{{W}.id}}}}", [fv("好友狀態", "select", "已封鎖"), fv("目前選單", "select", "訪客")])]),
     ])]
