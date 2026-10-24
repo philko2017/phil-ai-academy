@@ -415,7 +415,7 @@ def build_api():
     from_w = lambda k: sp(W, dict((a, n) for a, n, *_ in APPLY_FIELDS)[k], "" if k in ("phone", "email") else "[].plain_text")
     w_extra = {"plan": sp(W, "方案", ".name"), "pay5": sp(W, "匯款末五碼", "[].plain_text"),
                "paydate": sp(W, "匯款日期", ".start"), "expiry": sp(W, "到期日", ".start"), "admin": w_admin,
-               "menutest": "{{if(" + f"{W}.properties_value.`會員選單測試`; \"Y\"; \"N\")}}"}
+               "menutest": "{{if(" + f"{W}.properties_value.`會員選單測試`" + '; "Y"; "N")}}'}
     w_state = STATE % w_ident[2:-2]
     # 非會員的姓名是「（LINE）顯示名稱」，不是本名，不回給頁面；「給會員的話」由管理者在名冊填
     me_src = lambda k: ('{{if(' + w_ident[2:-2] + ' = "非會員"; ""; ' + from_w(k)[2:-2] + ')}}') if k == "name" else from_w(k)
@@ -974,11 +974,36 @@ def build_images():
     return bp
 
 
+def check_braces(bp, fname):
+    """產生前檢查：每個 {{ 都要有 }}。Python f-string 會把 }} 變成 }，少一個 Make 匯入時才報 Invalid IML（2026-10-24 踩過）"""
+    def walk(o):
+        if isinstance(o, dict):
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+        elif isinstance(o, str):
+            # 只數公式裡的配對（JSON 本身的 }} 不算）：遇到 {{ 開一層，開著時遇到 }} 關一層，最後要全部關完
+            depth, i = 0, 0
+            while i < len(o):
+                if o.startswith("{{", i):
+                    depth, i = depth + 1, i + 2
+                elif depth and o.startswith("}}", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+            if depth:
+                raise SystemExit(f"{fname}：公式的大括號不成對 → {o[:160]}")
+    walk(bp)
+
+
 def main():
     out = ROOT / "make" / ("example" if "--example" in sys.argv else "")
     out.mkdir(parents=True, exist_ok=True)
     for fname, bp in (("會員_API.blueprint.json", build_api()), ("會員_LINE事件.blueprint.json", build_events()),
                       ("會員_建立圖文選單.blueprint.json", build_menu()), ("圖片_上傳到雲端硬碟.blueprint.json", build_images())):
+        check_braces(bp, fname)
         p = out / fname
         p.write_text(json.dumps(bp, ensure_ascii=False, indent=1), encoding="utf-8")
         print(p.relative_to(ROOT), p.stat().st_size)
