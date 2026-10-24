@@ -268,12 +268,12 @@ function renderAdmin() {
   const m = S.members;
   const count = id => m.filter(x => x["身分"] === id).length;
   $("#app").innerHTML = `<h1>管理會員</h1>
+    ${viewAsCard()}
     <div class="stats"><button class="stat total${S.ident ? "" : " on"}" data-ident=""><b>${m.length}</b><small>全部</small></button>${IDENTS.map(i => `<button class="stat${i === "審核中" && count(i) ? " hot" : ""}${S.ident === i ? " on" : ""}" data-ident="${i}"><b>${count(i)}</b><small>${i}</small></button>`).join("")}</div>
     <p class="lead" id="identNote" style="margin-top:8px">${S.ident ? `只看「${esc(S.ident)}」${count(S.ident)} 位，再點一次或點「全部」看所有人` : "點上面的數字，只看那一種身分的人"}</p>
     <label class="f search"><input id="q" type="search" placeholder="搜尋姓名、電話、Email、LINE 名稱" value="${esc(S.q)}"></label>
     <div class="rows" id="rows">${adminRows()}</div>
     ${inviteCard()}
-    ${viewAsCard()}
     <div class="links">${navLink("home", "🪪", "回會員專區", "")}</div>`;
   // 打字時只換名冊，不重畫搜尋框，中文輸入法選字才不會被打斷
   $("#q").oninput = e => { S.q = e.target.value; $("#rows").innerHTML = adminRows(); };
