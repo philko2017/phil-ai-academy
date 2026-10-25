@@ -102,21 +102,24 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 </header>
 <form id="f">
 <div>
-<label for="topic">想講的主題</label>
-<input type="text" id="topic" placeholder="例如：中醫養生、存股、LINE 官方帳號" autocomplete="off" required>
+<label for="topic">你想講什麼事情</label>
+<input type="text" id="topic" placeholder="例如：用 AI 十分鐘做完簡報" autocomplete="off" required>
 </div>
 <div>
-<label for="who">你是誰 <small>（選填：專業、產品、想導流到哪裡）</small></label>
-<textarea id="who" placeholder="例如：中醫師，想把觀眾導到 LINE 預約"></textarea>
+<label for="who">你是誰 <small>（選填：職業、專長、在賣什麼）</small></label>
+<textarea id="who" placeholder="例如：教上班族用 AI 的講師"></textarea>
 </div>
 <div>
-<label>主要平台</label>
-<div class="chips" id="plat">
-<button type="button" class="chip" aria-pressed="true">FB</button>
-<button type="button" class="chip" aria-pressed="false">IG Reels</button>
-<button type="button" class="chip" aria-pressed="false">YouTube Shorts</button>
-<button type="button" class="chip" aria-pressed="false">TikTok</button>
+<label id="ctaLabel">希望觀眾看完做什麼</label>
+<div class="chips" id="cta" role="group" aria-labelledby="ctaLabel">
+<button type="button" class="chip" aria-pressed="true">私訊我</button>
+<button type="button" class="chip" aria-pressed="false">底下留言</button>
+<button type="button" class="chip" aria-pressed="false">加 LINE</button>
+<button type="button" class="chip" aria-pressed="false">追蹤我</button>
+<button type="button" class="chip" aria-pressed="false">分享給朋友</button>
+<button type="button" class="chip" aria-pressed="false">點連結了解</button>
 </div>
+<input type="text" id="ctaNote" placeholder="補充（選填）：例如留言「簡報」送你提示詞" autocomplete="off" style="margin-top:8px">
 </div>
 <button class="go" id="go" type="submit">產生題材</button>
 <div class="row" id="ctl" hidden>
@@ -139,6 +142,6 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 </section>
 <p class="foot">Phil 的 AI 學院 · 內容由 AI 產生，發布前請自己看過一遍。</p>
 </div>
-<script src="app.js?v=20261025-3"></script>
+<script src="app.js?v=20261025-4"></script>
 </body>
 </html>
