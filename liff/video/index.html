@@ -92,11 +92,6 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 .shot b { display: block; font-size: 15px; }
 .shot .cap { display: inline-block; margin-top: 6px; font-weight: 900; font-size: 14px; background: var(--ink); color: var(--bg); padding: 2px 8px; border-radius: 4px; }
 .shot .tip { margin-top: 6px; font-size: 13px; color: var(--muted); }
-details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
-summary { cursor: pointer; font-weight: 700; }
-details ol { margin: 10px 0 0; padding-left: 1.6em; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
-details ol b { color: var(--ink); }
-details ol span { color: var(--muted); }
 .foot { font-size: 12px; color: var(--muted); text-align: center; }
 </style>
 </head>
@@ -144,12 +139,8 @@ details ol span { color: var(--muted); }
 <div class="panel" id="p-script" hidden></div>
 <div class="panel" id="p-shots" hidden></div>
 </section>
-<details>
-<summary>16 條心法速查</summary>
-<ol id="rules"></ol>
-</details>
 <p class="foot">Phil 的 AI 學院 · 內容由 AI 產生，發布前請自己看過一遍。</p>
 </div>
-<script src="app.js?v=20261025-1"></script>
+<script src="app.js?v=20261025-2"></script>
 </body>
 </html>
