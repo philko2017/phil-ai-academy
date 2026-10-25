@@ -67,7 +67,7 @@ background: var(--rec); color: #fff; display: flex; justify-content: center; ali
 .result-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .result-head h2 { margin: 0; font-size: 18px; font-family: var(--display); }
 .badge { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--tag-soft); color: var(--tag); font-weight: 700; }
-.tabs { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; gap: 4px;
+.tabs { display: grid; grid-template-columns: repeat(2, 1fr); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; gap: 4px;
 position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 .tab { font: inherit; font-size: 14px; font-weight: 700; border: 0; background: none; color: var(--muted); padding: 9px 4px; border-radius: 9px; cursor: pointer; }
 .tab[aria-selected="true"] { background: var(--ink); color: var(--bg); }
@@ -86,11 +86,12 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 .seg .lab { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
 .seg .txt { font-family: var(--script); font-size: 18px; line-height: 1.75; min-width: 0; }
 .meta { font-size: 13px; color: var(--muted); }
-.shot { display: grid; grid-template-columns: 64px 1fr; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--line); }
-.shot:first-of-type { border-top: 0; padding-top: 0; }
-.shot b { display: block; font-size: 15px; }
-.shot .cap { display: inline-block; margin-top: 6px; font-weight: 900; font-size: 14px; background: var(--ink); color: var(--bg); padding: 2px 8px; border-radius: 4px; }
-.shot .tip { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.seg + .seg { padding-top: 14px; border-top: 1px dashed var(--line); }
+.view { margin-top: 10px; background: var(--bg); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.view .vl { font-size: 11px; letter-spacing: .08em; color: var(--muted); }
+.view b { display: block; font-size: 14px; font-weight: 700; }
+.view .cap { display: inline-block; margin-top: 6px; font-weight: 900; font-size: 13px; background: var(--ink); color: var(--bg); padding: 2px 8px; border-radius: 4px; }
+.view .tip { margin-top: 6px; font-size: 13px; color: var(--muted); }
 .foot { font-size: 12px; color: var(--muted); text-align: center; }
 </style>
 </head>
@@ -134,15 +135,13 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 </div>
 <div class="tabs" role="tablist">
 <button class="tab" role="tab" data-tab="dir" aria-selected="true">影片方向</button>
-<button class="tab" role="tab" data-tab="script" aria-selected="false">一分鐘講稿</button>
-<button class="tab" role="tab" data-tab="shots" aria-selected="false">畫面建議</button>
+<button class="tab" role="tab" data-tab="script" aria-selected="false">講稿與畫面</button>
 </div>
 <div class="panel" id="p-dir"></div>
 <div class="panel" id="p-script" hidden></div>
-<div class="panel" id="p-shots" hidden></div>
 </section>
 <p class="foot">Phil 的 AI 學院 · 內容由 AI 產生，發布前請自己看過一遍。</p>
 </div>
-<script src="app.js?v=20261025-5"></script>
+<script src="app.js?v=20261025-6"></script>
 </body>
 </html>
