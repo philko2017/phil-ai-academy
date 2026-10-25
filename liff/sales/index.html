@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://hook.us2.make.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex, nofollow">
+<title>銷售話術產生器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root {
+--bg: #F4F1EA;
+--card: #FFFFFF;
+--ink: #1C1F26;
+--muted: #696D78;
+--line: #E0DBD0;
+--mark: #FFE45C;
+--mark-ink: #1C1F26;
+--pen: #D2402B;
+--pen-soft: #FBE7E2;
+--tag: #1F6F5C;
+--tag-soft: #E1F1EC;
+--bubble-soft: #E3F8EB;
+--display: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+--body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+--long: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+--mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+--bg: #14161B; --card: #1E2129; --ink: #ECE9E2; --muted: #9EA2AC; --line: #2E323C;
+--mark: #6B5A12; --mark-ink: #FFF3B8; --pen: #FF7A62; --pen-soft: #3A221D; --tag: #7FD3BB; --tag-soft: #1C3530;
+--bubble-soft: #17301F; color-scheme: dark } }
+:root[data-theme="dark"] {
+--bg: #14161B; --card: #1E2129; --ink: #ECE9E2; --muted: #9EA2AC; --line: #2E323C;
+--mark: #6B5A12; --mark-ink: #FFF3B8; --pen: #FF7A62; --pen-soft: #3A221D; --tag: #7FD3BB; --tag-soft: #1C3530;
+--bubble-soft: #17301F; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 560px; margin: 0 auto; padding-block: 20px 48px;
+padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+.kicker { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; color: var(--pen); }
+h1 { font-family: var(--display); font-weight: 900; font-size: 28px; line-height: 1.25; margin: 0; text-wrap: balance; }
+h1 mark { background: linear-gradient(transparent 55%, var(--mark) 55%); color: inherit; padding: 0 2px; }
+.sub { color: var(--muted); margin: 0; font-size: 14px; }
+form { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+label, .lab { font-weight: 700; font-size: 14px; display: block; margin-bottom: 6px; }
+label small, .lab small { font-weight: 400; color: var(--muted); }
+input[type=text], textarea { width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--bg);
+border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; }
+textarea { resize: vertical; min-height: 64px; }
+#ref { min-height: 120px; font-size: 15px; }
+input:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--tag); outline-offset: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+details { border-top: 1px dashed var(--line); padding-top: 12px; }
+summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+summary small { font-weight: 400; color: var(--muted); }
+details > div { margin-top: 10px; }
+.hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.go { font: inherit; font-weight: 700; font-size: 17px; border: 0; border-radius: 12px; padding: 14px; cursor: pointer;
+background: var(--ink); color: var(--bg); }
+.go:disabled { opacity: .55; cursor: default; }
+.ghost { font: inherit; font-size: 14px; background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+.ghost:disabled { opacity: .5; cursor: default; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.status { font-size: 13px; color: var(--muted); min-height: 1.2em; margin: 0; }
+.status.err { color: var(--pen); }
+.result { display: flex; flex-direction: column; gap: 12px; }
+.angle { background: var(--mark); color: var(--mark-ink); border-radius: 14px; padding: 14px 16px; font-weight: 700; font-size: 16px; line-height: 1.5; }
+.angle small { display: block; font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: .08em; opacity: .7; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; gap: 4px;
+position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+.tab { font: inherit; font-size: 14px; font-weight: 700; border: 0; background: none; color: var(--muted); padding: 9px 4px; border-radius: 9px; cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+.panel { display: flex; flex-direction: column; gap: 10px; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.panel-head p { margin: 0; font-size: 13px; color: var(--muted); }
+.msg { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.msg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.msg-head b { font-size: 13px; color: var(--tag); }
+.msg-head span { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bubble { background: var(--bubble-soft); border-radius: 4px 16px 16px 16px; padding: 12px 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.post { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tags { color: var(--tag); font-size: 14px; }
+.blank { background: var(--mark); color: var(--mark-ink); border-radius: 3px; padding: 0 2px; }
+.doc { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 16px; display: flex; flex-direction: column; gap: 16px; }
+.doc h2 { margin: 0; font-family: var(--display); font-weight: 900; font-size: 22px; line-height: 1.35; }
+.doc .lead { margin: -8px 0 0; color: var(--muted); }
+.sec .sl { font-size: 12px; color: var(--pen); font-weight: 700; letter-spacing: .04em; }
+.sec p { margin: 4px 0 0; font-family: var(--long); font-size: 16px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.doc .end { margin: 0; font-weight: 700; border-top: 1px dashed var(--line); padding-top: 14px; }
+.todo { background: var(--pen-soft); border-radius: 14px; padding: 14px 16px; }
+.todo h3 { margin: 0 0 6px; font-size: 14px; }
+.todo ul { margin: 0; padding-left: 1.2em; }
+.foot { font-size: 12px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<span class="kicker">SALES COPY · 一人公司</span>
+<h1>銷售<mark>話術產生器</mark></h1>
+<p class="sub">填好你賣什麼、這次的優惠，一次拿到 LINE 短訊、社群貼文和銷售頁長文，複製就能用。</p>
+</header>
+<form id="f">
+<div>
+<label for="product">你賣什麼</label>
+<textarea id="product" placeholder="例如：幫餐廳老闆拍菜單照片和短影片，一次到店拍攝" required></textarea>
+</div>
+<div>
+<label for="who">賣給誰 <small>（選填）</small></label>
+<input type="text" id="who" placeholder="例如：剛開業、沒時間經營社群的小餐廳" autocomplete="off">
+</div>
+<div>
+<label for="offer">這次的優惠 <small>（選填：價格、折扣、期限、名額）</small></label>
+<textarea id="offer" placeholder="例如：原價 8,000，11 月底前 6,000，只收 5 家"></textarea>
+<p class="hint">價格和期限只會用你寫的；沒寫就不提價格。</p>
+</div>
+<div>
+<label for="pain">客人最常有的煩惱或疑慮 <small>（選填）</small></label>
+<textarea id="pain" placeholder="例如：拍了照片也沒人看、怕花錢沒效果"></textarea>
+</div>
+<div>
+<span class="lab" id="ctaLabel">希望對方看完做什麼</span>
+<div class="chips" id="cta" role="group" aria-labelledby="ctaLabel">
+<button type="button" class="chip" aria-pressed="true">私訊我</button>
+<button type="button" class="chip" aria-pressed="false">加 LINE</button>
+<button type="button" class="chip" aria-pressed="false">點連結報名</button>
+<button type="button" class="chip" aria-pressed="false">留言</button>
+<button type="button" class="chip" aria-pressed="false">打電話預約</button>
+</div>
+<input type="text" id="ctaNote" placeholder="補充（選填）：例如私訊「拍照」送報價單" autocomplete="off" style="margin-top:8px">
+</div>
+<div>
+<span class="lab" id="toneLabel">語氣</span>
+<div class="chips" id="tone" role="group" aria-labelledby="toneLabel">
+<button type="button" class="chip" aria-pressed="true">親切聊天</button>
+<button type="button" class="chip" aria-pressed="false">專業可信</button>
+<button type="button" class="chip" aria-pressed="false">活潑熱情</button>
+<button type="button" class="chip" aria-pressed="false">溫暖真誠</button>
+</div>
+</div>
+<details id="refBox">
+<summary>參考別人的文案 <small>（選填）</small></summary>
+<div>
+<textarea id="ref" placeholder="貼一段你覺得寫得好的銷售文字，AI 會學它的寫法，不會照抄句子"></textarea>
+</div>
+</details>
+<button class="go" id="go" type="submit">產生銷售文字</button>
+<div class="row" id="ctl" hidden>
+<button type="button" class="ghost" id="stop">停止</button>
+</div>
+<p class="status" id="status" aria-live="polite"></p>
+</form>
+<section class="result" id="result" hidden>
+<div class="angle" id="angle"></div>
+<div class="tabs" role="tablist">
+<button class="tab" role="tab" data-tab="line" aria-selected="true">LINE 短訊</button>
+<button class="tab" role="tab" data-tab="social" aria-selected="false">社群貼文</button>
+<button class="tab" role="tab" data-tab="page" aria-selected="false">銷售頁</button>
+</div>
+<div class="panel" id="p-line"></div>
+<div class="panel" id="p-social" hidden></div>
+<div class="panel" id="p-page" hidden></div>
+<div class="todo" id="todo" hidden></div>
+</section>
+<p class="foot">Phil 的 AI 學院 · 內容由 AI 產生，發出前請自己看一遍，標黃的「＿＿」記得填上。</p>
+</div>
+<script src="app.js?v=20261025-2"></script>
+</body>
+</html>
