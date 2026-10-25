@@ -48,6 +48,12 @@ header { display: flex; flex-direction: column; gap: 6px; }
 h1 { font-family: var(--display); font-weight: 900; font-size: 28px; line-height: 1.25; margin: 0; text-wrap: balance; }
 h1 mark { background: linear-gradient(transparent 55%, var(--mark) 55%); color: inherit; padding: 0 2px; }
 .sub { color: var(--muted); margin: 0; font-size: 14px; }
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 5px; }
+.mode { font: inherit; font-size: 15px; font-weight: 700; border: 0; background: none; color: var(--muted); padding: 10px 6px; border-radius: 10px; cursor: pointer; line-height: 1.3; }
+.mode small { display: block; font-size: 12px; font-weight: 400; }
+.mode[aria-pressed="true"] { background: var(--pen); color: #fff; }
+.ratio { margin: 0; font-size: 13px; color: var(--muted); text-align: center; }
+#salesForm, #lifeForm { display: flex; flex-direction: column; gap: 16px; }
 form { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 label, .lab { font-weight: 700; font-size: 14px; display: block; margin-bottom: 6px; }
 label small, .lab small { font-weight: 400; color: var(--muted); }
@@ -100,6 +106,10 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 .todo { background: var(--pen-soft); border-radius: 14px; padding: 14px 16px; }
 .todo h3 { margin: 0 0 6px; font-size: 14px; }
 .todo ul { margin: 0; padding-left: 1.2em; }
+.extra { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.extra h3 { margin: 0; font-size: 13px; color: var(--muted); }
+.extra ul { margin: 0; padding-left: 1.2em; }
+.story { font-family: var(--long); font-size: 16px; line-height: 1.8; }
 .foot { font-size: 12px; color: var(--muted); text-align: center; }
 </style>
 </head>
@@ -108,12 +118,18 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 <header>
 <span class="kicker">SALES COPY · 一人公司</span>
 <h1>銷售<mark>話術產生器</mark></h1>
-<p class="sub">填好你賣什麼、這次的優惠，一次拿到 LINE 短訊、社群貼文和銷售頁長文，複製就能用。</p>
+<p class="sub" id="sub"></p>
 </header>
+<div class="modes" role="group" aria-label="要寫哪一種">
+<button type="button" class="mode" data-mode="sales" aria-pressed="true">賣東西<small>LINE、社群、銷售頁</small></button>
+<button type="button" class="mode" data-mode="life" aria-pressed="false">生活分享<small>讓人認識你、願意留言</small></button>
+</div>
+<p class="ratio">經營社群小撇步：大約發 4 篇生活分享，再發 1 篇賣東西。</p>
 <form id="f">
+<div id="salesForm">
 <div>
 <label for="product">你賣什麼</label>
-<textarea id="product" placeholder="例如：幫餐廳老闆拍菜單照片和短影片，一次到店拍攝" required></textarea>
+<textarea id="product" placeholder="例如：幫餐廳老闆拍菜單照片和短影片，一次到店拍攝"></textarea>
 </div>
 <div>
 <label for="who">賣給誰 <small>（選填）</small></label>
@@ -154,6 +170,41 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 <textarea id="ref" placeholder="貼一段你覺得寫得好的銷售文字，AI 會學它的寫法，不會照抄句子"></textarea>
 </div>
 </details>
+</div>
+<div id="lifeForm" hidden>
+<div>
+<label for="event">今天發生了什麼</label>
+<textarea id="event" placeholder="一句話或幾個關鍵字就好，例如：帶女兒爬山，她一路抱怨，到山頂突然說謝謝爸爸"></textarea>
+</div>
+<div>
+<label for="feel">當下的感受，或想說的一句話 <small>（選填）</small></label>
+<textarea id="feel" placeholder="例如：原來陪伴不用很厲害，走完就好"></textarea>
+</div>
+<div>
+<span class="lab" id="linkLabel">要不要帶到你的工作</span>
+<div class="chips" id="link" role="group" aria-labelledby="linkLabel">
+<button type="button" class="chip" aria-pressed="true">完全不提</button>
+<button type="button" class="chip" aria-pressed="false">自然帶一句</button>
+<button type="button" class="chip" aria-pressed="false">延伸到專業</button>
+</div>
+</div>
+<div>
+<label for="me">你是誰、做什麼工作 <small>（選填，會記住）</small></label>
+<input type="text" id="me" placeholder="例如：教上班族用 AI 的講師" autocomplete="off">
+</div>
+<div>
+<label for="photo">照片裡有什麼 <small>（選填）</small></label>
+<input type="text" id="photo" placeholder="例如：山頂的合照，她比 YA" autocomplete="off">
+</div>
+<div>
+<span class="lab" id="ltoneLabel">語氣</span>
+<div class="chips" id="ltone" role="group" aria-labelledby="ltoneLabel">
+<button type="button" class="chip" aria-pressed="true">輕鬆幽默</button>
+<button type="button" class="chip" aria-pressed="false">溫暖感性</button>
+<button type="button" class="chip" aria-pressed="false">真誠反思</button>
+</div>
+</div>
+</div>
 <button class="go" id="go" type="submit">產生銷售文字</button>
 <div class="row" id="ctl" hidden>
 <button type="button" class="ghost" id="stop">停止</button>
@@ -172,8 +223,18 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 <div class="panel" id="p-page" hidden></div>
 <div class="todo" id="todo" hidden></div>
 </section>
+<section class="result" id="lifeResult" hidden>
+<div class="tabs" role="tablist">
+<button class="tab" role="tab" data-ltab="short" aria-selected="true">短版</button>
+<button class="tab" role="tab" data-ltab="mid" aria-selected="false">中版</button>
+<button class="tab" role="tab" data-ltab="story" aria-selected="false">故事版</button>
+</div>
+<div class="panel" id="p-life"></div>
+<div class="extra" id="lifeExtra"></div>
+<div class="todo" id="lifeTodo" hidden></div>
+</section>
 <p class="foot">Phil 的 AI 學院 · 內容由 AI 產生，發出前請自己看一遍，標黃的「＿＿」記得填上。</p>
 </div>
-<script src="app.js?v=20261025-2"></script>
+<script src="app.js?v=20261025-3"></script>
 </body>
 </html>
