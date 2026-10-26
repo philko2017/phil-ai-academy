@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF 整理工具</title>
+<script src="lib/pdf.min.js"></script>
+<script src="lib/pdf.worker.min.js"></script>
+<script src="lib/pdf-lib.min.js"></script>
+<script src="lib/Sortable.min.js"></script>
+<style>
+:root {
+--bg: #f4f5f7; --panel: #ffffff; --text: #1f2328; --muted: #6b7280;
+--border: #d9dce1; --accent: #2563eb; --accent-soft: #dbe7ff;
+--danger: #dc2626; --shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme="light"]) {
+--bg: #17191c; --panel: #22252a; --text: #e6e8eb; --muted: #9aa1ab;
+--border: #363a41; --accent: #5b8cff; --accent-soft: #263553;
+--danger: #f87171; --shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+header { position: sticky; top: 0; z-index: 10; background: var(--panel); border-bottom: 1px solid var(--border);
+padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+h1 { font-size: 16px; margin: 0 12px 0 0; white-space: nowrap; }
+button, .btn { font: inherit; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+padding: 6px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+button:hover:not(:disabled), .btn:hover { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger:not(:disabled) { color: var(--danger); }
+.sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+.spacer { flex: 1; }
+input[type=text] { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+background: var(--bg); color: var(--text); width: 180px; }
+#status { color: var(--muted); font-size: 13px; padding: 6px 16px; }
+#sources { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px; }
+.src-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 8px;
+border: 1px solid var(--border); border-radius: 999px; background: var(--panel); }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+main { padding: 12px 16px 80px; min-height: calc(100vh - 120px); }
+#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+.card { position: relative; background: var(--panel); border: 2px solid transparent; border-radius: 8px;
+padding: 8px; box-shadow: var(--shadow); cursor: grab; user-select: none; }
+.card.selected { border-color: var(--accent); background: var(--accent-soft); }
+.card.ghost { opacity: .35; }
+.thumb { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.thumb img { max-width: 100%; max-height: 100%; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.12);
+transition: transform .15s; pointer-events: none; }
+.thumb img:not([src]) { width: 70%; height: 90%; }
+.meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
+.num { font-weight: 600; }
+.from { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tools { position: absolute; top: 6px; right: 6px; display: none; gap: 4px; }
+.card:hover .tools { display: flex; }
+.tools button { padding: 2px 6px; font-size: 13px; line-height: 1.3; box-shadow: var(--shadow); }
+#empty { border: 2px dashed var(--border); border-radius: 12px; padding: 60px 20px; text-align: center; color: var(--muted); }
+#empty p { margin: 6px 0; }
+body.dragover main { outline: 3px dashed var(--accent); outline-offset: -8px; }
+.hint { font-size: 12px; color: var(--muted); padding: 0 16px 8px; }
+kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; }
+#busy { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: center;
+justify-content: center; z-index: 50; color: #fff; font-size: 16px; }
+#busy.on { display: flex; }
+.badges { position: absolute; top: 6px; left: 6px; display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.badge { font-size: 11px; line-height: 1.4; padding: 0 6px; border-radius: 999px; background: var(--panel);
+border: 1px solid var(--border); box-shadow: var(--shadow); white-space: nowrap; }
+.badge.warn { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+.badge.bad { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+#status .warn { color: #b45309; font-weight: 600; }
+dialog { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text);
+padding: 0; width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+.dlg-head { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.dlg-head h2 { font-size: 16px; margin: 0 0 4px; }
+.dlg-head p { margin: 0; color: var(--muted); font-size: 13px; }
+.dlg-body { padding: 8px 18px; overflow: auto; max-height: calc(100vh - 220px); }
+.dlg-foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+.link-row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.link-row:last-child { border-bottom: 0; }
+.link-row .desc { flex: 1; min-width: 0; font-size: 13px; }
+.link-row .desc b { display: block; margin-bottom: 2px; }
+.link-row select { font: inherit; font-size: 13px; padding: 4px; border-radius: 6px; border: 1px solid var(--border);
+background: var(--bg); color: var(--text); max-width: 100%; margin-top: 6px; }
+.link-row .prev { width: 64px; height: 64px; flex: none; display: flex; align-items: center; justify-content: center; }
+.link-row .prev img { max-width: 100%; max-height: 100%; box-shadow: 0 0 0 1px rgba(0,0,0,.15); background: #fff; }
+.tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; margin-right: 4px; }
+.tag.bad { background: #fee2e2; color: #991b1b; } .tag.warn { background: #fef3c7; color: #92400e; }
+#editDlg { width: min(1280px, calc(100vw - 24px)); height: calc(100vh - 24px); max-height: none; }
+#editDlg[open] { display: grid; grid-template-rows: auto 1fr auto; }
+.ed-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.ed-head h2 { font-size: 15px; margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-main { display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
+#edStage { overflow: auto; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 16px; min-height: 0; }
+#edPage { position: relative; flex: none; box-shadow: 0 2px 10px rgba(0,0,0,.2); background: #fff; }
+#edCanvas { display: block; }
+#edOverlay { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+.box { position: absolute; border: 2px dashed #2563eb; background: rgba(37,99,235,.10); cursor: move; }
+.box.url { border-color: #16a34a; background: rgba(22,163,74,.10); }
+.box.other { border-color: #64748b; background: rgba(100,116,139,.10); }
+.box.bad { border-color: #dc2626; background: rgba(220,38,38,.10); }
+.box.sel { border-style: solid; box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
+.box-label { position: absolute; left: -2px; bottom: 100%; font-size: 11px; line-height: 1.5; padding: 0 5px; white-space: nowrap;
+background: #2563eb; color: #fff; border-radius: 3px 3px 0 0; pointer-events: none; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.box.url .box-label { background: #16a34a; } .box.other .box-label { background: #64748b; } .box.bad .box-label { background: #dc2626; }
+.h { position: absolute; width: 10px; height: 10px; background: #fff; border: 2px solid #111; border-radius: 2px; }
+.h[data-h=nw] { left: -6px; top: -6px; cursor: nwse-resize; } .h[data-h=se] { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.h[data-h=ne] { right: -6px; top: -6px; cursor: nesw-resize; } .h[data-h=sw] { left: -6px; bottom: -6px; cursor: nesw-resize; }
+#edTemp { position: absolute; border: 2px dashed #111; background: rgba(0,0,0,.06); display: none; pointer-events: none; }
+#edPanel { border-left: 1px solid var(--border); overflow: auto; padding: 12px 14px; font-size: 13px; }
+#edPanel h3 { font-size: 13px; margin: 4px 0 8px; color: var(--muted); font-weight: 600; }
+.ed-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.ed-item { text-align: left; display: flex; gap: 6px; align-items: center; padding: 5px 8px; font-size: 12px; }
+.ed-item.sel { border-color: var(--accent); background: var(--accent-soft); }
+.ed-item span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-field { margin-bottom: 12px; }
+.ed-field > label { display: block; font-weight: 600; margin-bottom: 4px; }
+.ed-field select, .ed-field input[type=text] { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--border);
+border-radius: 6px; background: var(--bg); color: var(--text); }
+.seg { display: flex; } .seg button { flex: 1; border-radius: 0; } .seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; } .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ed-thumb { margin-top: 6px; height: 120px; display: flex; align-items: center; justify-content: center; background: var(--bg); border-radius: 6px; }
+.ed-thumb img { max-height: 108px; max-width: 108px; box-shadow: 0 0 0 1px rgba(0,0,0,.15); background: #fff; }
+.ed-msg { font-size: 12px; margin-top: 4px; color: var(--muted); word-break: break-all; }
+.ed-msg.bad { color: var(--danger); } .ed-msg.ok { color: #16a34a; }
+.ed-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.ed-row input[type=color] { width: 40px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; }
+.ed-empty { color: var(--muted); line-height: 1.7; }
+.ed-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.ed-foot .tip { flex: 1; color: var(--muted); font-size: 12px; }
+@media (max-width: 760px) {
+.ed-main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+#edPanel { border-left: 0; border-top: 1px solid var(--border); max-height: 45vh; }
+.ed-foot .tip { display: none; }
+}
+@media (max-width: 600px) { #grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); } input[type=text] { width: 130px; } }
+</style>
+</head>
+<body>
+<header>
+<h1>📄 PDF 整理工具</h1>
+<label class="btn">＋ 加入 PDF<input id="fileInput" type="file" accept="application/pdf,.pdf" multiple hidden></label>
+<span class="sep"></span>
+<button id="btnAll">全選</button>
+<button id="btnDup" disabled>複製頁面</button>
+<button id="btnRotL" disabled>↺ 左轉</button>
+<button id="btnRotR" disabled>↻ 右轉</button>
+<button id="btnDel" class="danger" disabled>刪除頁面</button>
+<button id="btnUndo" disabled>復原</button>
+<button id="btnClear" disabled>清空</button>
+<span class="spacer"></span>
+<input id="outName" type="text" value="整理後.pdf" title="匯出檔名">
+<button id="btnExport" class="primary" disabled>匯出 PDF</button>
+</header>
+<div id="status">尚未載入檔案</div>
+<div id="sources"></div>
+<div class="hint">拖曳頁面縮圖可調整順序　·　<b>雙擊頁面可編輯超連結</b>　·　🔗＝頁面上的連結數，◎＝被其他頁連結，⚠＝連結目標已刪除或重複　·　點選＝單選，<kbd>Ctrl</kbd>/<kbd>⌘</kbd>＋點選＝多選，<kbd>Shift</kbd>＋點選＝範圍選取　·　<kbd>Delete</kbd> 刪除，<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>D</kbd> 複製，<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> 復原</div>
+<main id="main">
+<div id="empty">
+<p style="font-size:40px">📥</p>
+<p><strong>把 PDF 檔拖曳到這裡</strong>，或點左上角「加入 PDF」</p>
+<p>可一次加入多個檔案，所有頁面會依序排在一起（即合併）</p>
+<p style="font-size:12px">檔案只在你的電腦上處理，不會上傳到任何伺服器</p>
+</div>
+<div id="grid"></div>
+</main>
+<div id="busy">處理中…</div>
+<dialog id="linkDlg">
+<div class="dlg-head">
+<h2>🔗 請確認內部超連結</h2>
+<p id="linkDlgSummary"></p>
+</div>
+<div class="dlg-body" id="linkDlgBody"></div>
+<div class="dlg-foot">
+<button id="linkDlgCancel">返回修改</button>
+<button id="linkDlgOk" class="primary">確認並匯出</button>
+</div>
+</dialog>
+<dialog id="editDlg">
+<div class="ed-head">
+<h2 id="edTitle">編輯連結</h2>
+<button id="edPrev" title="儲存並編輯上一頁">◀ 上一頁</button>
+<button id="edNext" title="儲存並編輯下一頁">下一頁 ▶</button>
+</div>
+<div class="ed-main">
+<div id="edStage">
+<div id="edPage">
+<canvas id="edCanvas"></canvas>
+<div id="edOverlay"><div id="edTemp"></div></div>
+</div>
+</div>
+<div id="edPanel"></div>
+</div>
+<div class="ed-foot">
+<span class="tip">在頁面上拖曳畫出連結範圍　·　點選方框可移動，拖曳角落調整大小　·　<kbd>Delete</kbd> 刪除　<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> 復原　方向鍵微調</span>
+<button id="edCancel">取消</button>
+<button id="edDone" class="primary">完成</button>
+</div>
+</dialog>
+<script src="app.js?v=20261026-1"></script>
+</body>
+</html>
