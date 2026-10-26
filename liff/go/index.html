@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex, nofollow">
+<title>前往 LINE｜Phil 的 AI 學院</title>
+<style>
+:root { --bg: #F5F6FA; --card: #FFFFFF; --ink: #1B1E2B; --muted: #676C7E; --line: #E3E5EC; --brand: #3B5BDB; --green: #06C755; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+--bg: #13151C; --card: #1E212B; --ink: #ECEDF2; --muted: #9EA3B3; --line: #2D313D; --brand: #8FA6FF; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #13151C; --card: #1E212B; --ink: #ECEDF2; --muted: #9EA3B3; --line: #2D313D; --brand: #8FA6FF; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 440px; min-height: 100svh; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-left, 0px)) 40px;
+display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+.mark { width: 56px; height: 56px; border-radius: 16px; background: var(--brand); color: #fff; font-weight: 900; font-size: 22px;
+display: grid; place-items: center; }
+h1 { margin: 0; font-size: 24px; line-height: 1.3; }
+p { margin: 0; color: var(--muted); }
+.go { display: block; text-align: center; text-decoration: none; font-weight: 700; font-size: 18px; color: #fff; background: var(--green);
+border-radius: 14px; padding: 16px; }
+.go:focus-visible, .ghost:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.card b { font-size: 15px; }
+.card ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: 15px; }
+.ghost { font: inherit; font-size: 15px; background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+.note { font-size: 13px; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<main class="wrap">
+<div class="mark" aria-hidden="true">AI</div>
+<h1>前往 Phil 的 AI 學院 LINE</h1>
+<p id="lead">正在開啟 LINE…</p>
+<a class="go" id="go" href="#">用 LINE 開啟</a>
+<section class="card" id="help" hidden>
+<b>沒有跳到 LINE？</b>
+<ol>
+<li>點右上角「⋯」</li>
+<li>選「在外部瀏覽器開啟」（或「用 Safari／Chrome 開啟」）</li>
+<li>在新開的頁面按「用 LINE 開啟」</li>
+</ol>
+<button class="ghost" id="copy" type="button">或複製連結，貼到 LINE 聊天室</button>
+<p class="note" id="copied" aria-live="polite"></p>
+</section>
+</main>
+<script src="app.js?v=20261026-1"></script>
+</body>
+</html>
