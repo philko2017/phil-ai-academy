@@ -102,6 +102,8 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 <h1>短影片題材產生器</h1>
 <p class="sub">輸入想講的主題，一次拿到三個影片方向、一分鐘講稿和畫面建議。依「16 條短影音心法」產生。</p>
 </header>
+<div class="row" style="margin:0 0 12px"><button type="button" class="ghost" id="savedBtn">我的紀錄</button></div>
+<div id="savedList" hidden style="margin:0 0 16px"></div>
 <form id="f">
 <div>
 <label for="topic">你想講什麼事情</label>
@@ -123,6 +125,7 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 </div>
 <input type="text" id="ctaNote" placeholder="補充（選填）：例如留言「簡報」送你提示詞" autocomplete="off" style="margin-top:8px">
 </div>
+<label style="display:flex;align-items:center;gap:8px;margin:12px 0"><input type="checkbox" id="keep" style="width:18px;height:18px;flex:none"> 儲存這次結果，之後可以回來看</label>
 <button class="go" id="go" type="submit">產生題材</button>
 <div class="row" id="ctl" hidden>
 <button type="button" class="ghost" id="stop">停止</button>
@@ -143,6 +146,6 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 <p class="foot">Phil 的 AI 學院 · 內容由 AI 產生，發布前請自己看過一遍。</p>
 </div>
 <script src="https://static.line-scdn.net/liff/edge/versions/2.31.2/sdk.js"></script>
-<script src="app.js?v=20261031-1"></script>
+<script src="app.js?v=20261031-2"></script>
 </body>
 </html>

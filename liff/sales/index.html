@@ -120,6 +120,8 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 <h1>銷售<mark>話術產生器</mark></h1>
 <p class="sub" id="sub"></p>
 </header>
+<div class="row" style="margin:0 0 12px"><button type="button" class="ghost" id="savedBtn">我的紀錄</button></div>
+<div id="savedList" hidden style="margin:0 0 16px"></div>
 <div class="modes" role="group" aria-label="要寫哪一種">
 <button type="button" class="mode" data-mode="sales" aria-pressed="true">賣東西<small>LINE、社群、銷售頁</small></button>
 <button type="button" class="mode" data-mode="life" aria-pressed="false">生活分享<small>讓人認識你、願意留言</small></button>
@@ -205,6 +207,7 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 </div>
 </div>
 </div>
+<label style="display:flex;align-items:center;gap:8px;margin:12px 0"><input type="checkbox" id="keep" style="width:18px;height:18px;flex:none"> 儲存這次結果，之後可以回來看</label>
 <button class="go" id="go" type="submit">產生銷售文字</button>
 <div class="row" id="ctl" hidden>
 <button type="button" class="ghost" id="stop">停止</button>
@@ -236,6 +239,6 @@ position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
 <p class="foot">Phil 的 AI 學院 · 內容由 AI 產生，發出前請自己看一遍，標黃的「＿＿」記得填上。</p>
 </div>
 <script src="https://static.line-scdn.net/liff/edge/versions/2.31.2/sdk.js"></script>
-<script src="app.js?v=20261031-1"></script>
+<script src="app.js?v=20261031-2"></script>
 </body>
 </html>
