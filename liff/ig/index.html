@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.line-scdn.net https://liffsdk.line-scdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://hook.us2.make.com https://api.line.me https://*.line.me https://*.line-scdn.net https://uts-front.line-apps.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex, nofollow">
+<title>IG 貼文產生器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+:root {
+--bg: #F3F1EE;
+--card: #FFFFFF;
+--ink: #1D2230;
+--muted: #6B6F7B;
+--line: #E2DED8;
+--accent: #E5432F;
+--focus: #2F5BD3;
+--body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+--bg: #15171D; --card: #1F222B; --ink: #ECEAE6; --muted: #9DA1AC; --line: #2E323D; --accent: #FF6450; --focus: #8EAAFF; color-scheme: dark } }
+:root[data-theme="dark"] {
+--bg: #15171D; --card: #1F222B; --ink: #ECEAE6; --muted: #9DA1AC; --line: #2E323D; --accent: #FF6450; --focus: #8EAAFF; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 520px; margin: 0 auto; padding-block: 20px 48px;
+padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-direction: column; gap: 4px; }
+h1 { font-weight: 900; font-size: 28px; line-height: 1.2; margin: 0; }
+.sub { color: var(--muted); margin: 0; font-size: 14px; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+label, .label { font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; margin-bottom: 6px; }
+.count { font-weight: 400; color: var(--muted); }
+textarea { display: block; width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--bg);
+border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; resize: vertical; }
+textarea:focus-visible, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.go { font: inherit; font-weight: 700; font-size: 17px; border: 0; border-radius: 12px; padding: 14px; cursor: pointer; background: var(--accent); color: #fff; }
+.go:disabled, .ghost:disabled { opacity: .55; cursor: default; }
+.ghost { font: inherit; font-size: 14px; background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row .go { flex: 1; font-size: 15px; padding: 11px; }
+.status { font-size: 13px; color: var(--muted); min-height: 1.2em; margin: 0; }
+.status.err { color: var(--accent); }
+.saved-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.saved-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.foot { color: var(--muted); font-size: 12px; text-align: center; margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>IG 貼文產生器</h1>
+<p class="sub">輸入一個想法，馬上拿到內文、Hashtag 和圖卡文字，改好一鍵複製貼到 IG。</p>
+</header>
+<section class="box">
+<div>
+<label for="idea">你的想法</label>
+<textarea id="idea" rows="3" placeholder="想講什麼，一兩句話就好"></textarea>
+</div>
+<div>
+<span class="label" id="formLabel">類型</span>
+<div class="chips" id="form" role="group" aria-labelledby="formLabel">
+<button type="button" class="chip" data-v="單圖金句" aria-pressed="true">單圖金句</button>
+<button type="button" class="chip" data-v="輪播短文" aria-pressed="false">輪播短文</button>
+</div>
+</div>
+<div>
+<span class="label" id="voiceLabel">人稱</span>
+<div class="chips" id="voice" role="group" aria-labelledby="voiceLabel">
+<button type="button" class="chip" data-v="我" aria-pressed="false">第一人稱：我</button>
+<button type="button" class="chip" data-v="你" aria-pressed="true">對朋友說：你</button>
+<button type="button" class="chip" data-v="他" aria-pressed="false">講別人的事情：他</button>
+</div>
+</div>
+<div>
+<span class="label" id="lenLabel">內文字數</span>
+<div class="chips" id="len" role="group" aria-labelledby="lenLabel">
+<button type="button" class="chip" data-v="50" aria-pressed="true">50 字內</button>
+<button type="button" class="chip" data-v="100" aria-pressed="false">100 字</button>
+<button type="button" class="chip" data-v="300" aria-pressed="false">300 字</button>
+<button type="button" class="chip" data-v="500" aria-pressed="false">500 字</button>
+</div>
+</div>
+<button class="go" id="go" type="button">產生貼文</button>
+<p class="status" id="status" aria-live="polite"></p>
+</section>
+<section class="box" id="result" hidden>
+<div>
+<label for="caption">內文 <span class="count" id="count"></span></label>
+<textarea id="caption" rows="10"></textarea>
+</div>
+<div>
+<label for="tags">Hashtag</label>
+<textarea id="tags" rows="2"></textarea>
+</div>
+<div>
+<label for="cards">圖卡文字（每張之間空一行）</label>
+<textarea id="cards" rows="6"></textarea>
+</div>
+<div class="row">
+<button class="go" id="copy" type="button">複製到剪貼簿</button>
+<button class="ghost" id="save" type="button">存檔</button>
+</div>
+<p class="status" id="saved" aria-live="polite"></p>
+</section>
+<div class="row"><button class="ghost" id="savedBtn" type="button">我的紀錄</button></div>
+<div class="box" id="savedList" hidden></div>
+<p class="foot">Phil 的 AI 學院 · 內容由 AI 產生，發布前請自己看過一遍，不符合事實的地方要改掉。</p>
+</div>
+<script src="https://static.line-scdn.net/liff/edge/versions/2.31.2/sdk.js"></script>
+<script src="app.js?v=20261101-1"></script>
+</body>
+</html>
