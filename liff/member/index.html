@@ -109,7 +109,12 @@ dt{color:var(--soft)}
 .body{white-space:pre-line;color:var(--soft)}
 .grid{display:grid;gap:14px;margin-top:6px}
 .grid .card{margin-top:0}
-.item{display:block;text-decoration:none;color:inherit;padding:0;overflow:hidden}
+.item{display:block;padding:0;overflow:hidden}
+.item>a{display:block;text-decoration:none;color:inherit}
+.acts{display:flex;gap:8px;padding:0 14px 14px}
+.act{flex:1;height:42px;border-radius:12px;font-weight:700;background:var(--brand-bg);color:var(--brand)}
+.act.go{background:var(--brand);color:var(--on-brand)}
+.act:disabled{opacity:.45}
 .item .cover,.item .cover-wrap .cover{border-radius:0}
 .item h2{padding:12px 14px 0;font-size:16px}
 .item .lead{padding:0 14px 14px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -150,6 +155,6 @@ dt{color:var(--soft)}
 </div>
 <div class="bar" id="bar" hidden><div class="in" id="barIn"></div></div>
 <script src="https://static.line-scdn.net/liff/edge/versions/2.31.2/sdk.js"></script>
-<script src="app.js?v=20261031-2"></script>
+<script src="app.js?v=20261102-1"></script>
 </body>
 </html>
