@@ -59,6 +59,8 @@ padding: 6px 12px; border-radius: 999px; cursor: pointer; }
 .count.over { color: var(--accent); font-weight: 700; }
 .core p { margin: 0; color: var(--muted); }
 .foot { color: var(--muted); font-size: 12px; text-align: center; margin: 0; }
+.tabs .chip { font-size: 15px; padding: 8px 18px; }
+.tip { color: var(--muted); font-size: 13px; margin: 0; }
 </style>
 </head>
 <body>
@@ -69,9 +71,30 @@ padding: 6px 12px; border-radius: 999px; cursor: pointer; }
 <button type="button" class="chip" data-v="light" aria-pressed="false">淺色</button>
 <button type="button" class="chip" data-v="dark" aria-pressed="false">深色</button>
 </div></div>
-<p class="sub">輸入一個想法，選好結尾形式，馬上拿到排好段落的內文，改好一鍵複製貼到 Threads。</p>
+<p class="sub" id="sub">輸入一個想法，選好結尾形式，馬上拿到排好段落的內文，改好一鍵複製貼到 Threads。</p>
 </header>
-<section class="box">
+<div class="chips tabs" id="tab" role="group" aria-label="功能">
+<button type="button" class="chip" data-v="post" aria-pressed="true">寫貼文</button>
+<button type="button" class="chip" data-v="reply" aria-pressed="false">回覆留言</button>
+</div>
+<section class="box" id="replyForm" hidden>
+<div>
+<label for="post">對方的貼文或留言</label>
+<textarea id="post" rows="6" placeholder="把對方的文字整段貼上"></textarea>
+</div>
+<div>
+<span class="label" id="rlenLabel">回覆字數</span>
+<div class="chips" id="rlen" role="group" aria-labelledby="rlenLabel">
+<button type="button" class="chip" data-v="100" aria-pressed="false">100 字</button>
+<button type="button" class="chip" data-v="200" aria-pressed="true">200 字</button>
+<button type="button" class="chip" data-v="300" aria-pressed="false">300 字</button>
+</div>
+</div>
+<button class="go" id="rgo" type="button">產生回覆</button>
+<p class="status" id="rstatus" aria-live="polite"></p>
+<p class="tip">回覆前改一兩句，加進你自己的話；短時間大量留言，可能被 Threads 當成垃圾訊息。</p>
+</section>
+<section class="box" id="postForm">
 <div>
 <label for="idea">你的想法</label>
 <textarea id="idea" rows="3" placeholder="想講什麼，一兩句話就好"></textarea>
@@ -107,9 +130,9 @@ padding: 6px 12px; border-radius: 999px; cursor: pointer; }
 <p class="status" id="status" aria-live="polite"></p>
 </section>
 <section class="box" id="result" hidden>
-<div class="core"><span class="label">這篇的主旨（不會複製，只給你檢查方向）</span><p id="core"></p></div>
+<div class="core" id="coreBox"><span class="label">這篇的主旨（不會複製，只給你檢查方向）</span><p id="core"></p></div>
 <div>
-<label for="caption">內文 <span class="count" id="count"></span></label>
+<label for="caption"><span id="captionLabel">內文</span> <span class="count" id="count"></span></label>
 <textarea id="caption" rows="10"></textarea>
 </div>
 <div class="row">
@@ -123,6 +146,6 @@ padding: 6px 12px; border-radius: 999px; cursor: pointer; }
 <p class="foot">內容由 AI 產生，發布前請自己看過一遍，不符合事實的地方要改掉。本工具並非 Threads 或 Meta 官方產品。</p>
 </div>
 <script src="https://static.line-scdn.net/liff/edge/versions/2.31.2/sdk.js"></script>
-<script src="app.js?v=20261103-2"></script>
+<script src="app.js?v=20261104-1"></script>
 </body>
 </html>
