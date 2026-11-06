@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.line-scdn.net https://liffsdk.line-scdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://hook.us2.make.com https://api.line.me https://*.line.me https://*.line-scdn.net https://uts-front.line-apps.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.line-scdn.net https://liffsdk.line-scdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://idly-junction-altitude.ngrok-free.dev https://hook.us2.make.com https://api.line.me https://*.line.me https://*.line-scdn.net https://uts-front.line-apps.com; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="robots" content="noindex, nofollow">
 <title>Threads 貼文產生器</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -85,6 +85,7 @@ padding: 6px 12px; border-radius: 999px; cursor: pointer; }
 <div>
 <span class="label" id="rlenLabel">回覆字數</span>
 <div class="chips" id="rlen" role="group" aria-labelledby="rlenLabel">
+<button type="button" class="chip" data-v="50" aria-pressed="false">50 字</button>
 <button type="button" class="chip" data-v="100" aria-pressed="false">100 字</button>
 <button type="button" class="chip" data-v="200" aria-pressed="true">200 字</button>
 <button type="button" class="chip" data-v="300" aria-pressed="false">300 字</button>
@@ -146,6 +147,6 @@ padding: 6px 12px; border-radius: 999px; cursor: pointer; }
 <p class="foot">內容由 AI 產生，發布前請自己看過一遍，不符合事實的地方要改掉。本工具並非 Threads 或 Meta 官方產品。</p>
 </div>
 <script src="https://static.line-scdn.net/liff/edge/versions/2.31.2/sdk.js"></script>
-<script src="app.js?v=20261104-1"></script>
+<script src="app.js?v=20261105-1"></script>
 </body>
 </html>
